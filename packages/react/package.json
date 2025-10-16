@@ -1,0 +1,36 @@
+{
+  "name": "@zocket/react",
+  "version": "0.1.0",
+  "description": "Type-safe React hooks for Zocket WebSockets",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@zocket/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "react": "^18.0.0",
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "websocket",
+    "react",
+    "hooks",
+    "typescript",
+    "type-safe",
+    "real-time"
+  ],
+  "author": "",
+  "license": "MIT"
+}

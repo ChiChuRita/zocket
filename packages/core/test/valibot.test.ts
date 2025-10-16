@@ -1,0 +1,118 @@
+import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import * as v from "valibot";
+import { zocket, createBunServer } from "../src/index";
+import { createZocketClient } from "../src/client/client";
+
+describe("Valibot validator integration", () => {
+  let server: any;
+  let port: number;
+
+  const zo = zocket.create({
+    headers: v.object({
+      user: v.optional(v.string(), "guest"),
+    }),
+    onConnect: (headers, clientId) => {
+      return {
+        user: headers.user,
+      };
+    },
+    onDisconnect: (ctx, clientId) => {
+      console.log(`❌ ${ctx.user} disconnected (${clientId})`);
+    },
+  });
+
+  const valibotRouter = {
+    echo: {
+      ping: zo.message.incoming({
+        payload: v.object({
+          message: v.optional(v.string(), "ping"),
+        }),
+      }),
+      onPong: zo.message.outgoing({
+        payload: v.object({
+          reply: v.string(),
+        }),
+      }),
+    },
+  };
+
+  type ValibotRouter = typeof valibotRouter;
+
+  const appRouter = zo.router(valibotRouter, {
+    echo: {
+      ping: ({ payload, ctx }) => {
+        const reply = `pong: ${payload.message}`;
+        ctx.send.echo.onPong({ reply }).to([ctx.clientId]);
+      },
+    },
+  });
+
+  beforeAll(() => {
+    const handlers = createBunServer(appRouter, zo);
+    server = Bun.serve({
+      fetch: handlers.fetch,
+      websocket: handlers.websocket,
+      port: 0,
+      hostname: "127.0.0.1",
+    });
+    port = server.port;
+  });
+
+  afterAll(() => {
+    server.stop(true);
+  });
+
+  test("client can send ping and receive pong with Valibot schemas", async () => {
+    const client = createZocketClient<ValibotRouter>(`ws://127.0.0.1:${port}`, {
+      headers: { user: "valibot-tester" },
+      maxReconnectionDelay: 1000,
+      minReconnectionDelay: 100,
+      debug: false,
+    });
+
+    const pongPromise = new Promise<string>((resolve) => {
+      client.on.echo.onPong((data) => {
+        resolve(data.reply);
+      });
+    });
+
+    await new Promise<void>((resolve) => {
+      client.onOpen(() => {
+        client.send.echo.ping({ message: "hello from valibot" });
+        resolve();
+      });
+    });
+
+    const result = await pongPromise;
+    expect(result).toBe("pong: hello from valibot");
+
+    client.close();
+  });
+
+  test("client can use default values from Valibot schema", async () => {
+    const client = createZocketClient<ValibotRouter>(`ws://127.0.0.1:${port}`, {
+      headers: { user: "valibot-default-tester" },
+      maxReconnectionDelay: 1000,
+      minReconnectionDelay: 100,
+      debug: false,
+    });
+
+    const pongPromise = new Promise<string>((resolve) => {
+      client.on.echo.onPong((data) => {
+        resolve(data.reply);
+      });
+    });
+
+    await new Promise<void>((resolve) => {
+      client.onOpen(() => {
+        client.send.echo.ping({});
+        resolve();
+      });
+    });
+
+    const result = await pongPromise;
+    expect(result).toBe("pong: ping");
+
+    client.close();
+  });
+});

@@ -1,0 +1,39 @@
+{
+  "name": "@zocket/core",
+  "version": "0.1.0",
+  "description": "Type-safe WebSocket library similar to tRPC",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "npm run build:core && npm run build:bun",
+    "build:core": "tsc",
+    "build:bun": "tsc --project tsconfig.bun.json",
+    "build:deno": "tsc --project tsconfig.deno.json",
+    "dev": "tsc --watch",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@standard-schema/spec": "^1.0.0",
+    "partysocket": "^1.1.4",
+    "reconnecting-websocket": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "bun-types": "latest",
+    "typescript": "^5.0.0",
+    "valibot": "^1.1.0",
+    "zod": "^4.1.12"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "websocket",
+    "typescript",
+    "type-safe",
+    "real-time"
+  ],
+  "author": "",
+  "license": "MIT"
+}

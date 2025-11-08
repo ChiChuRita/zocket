@@ -5,12 +5,27 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/client.d.ts",
+      "import": "./dist/client/client.js"
+    },
+    "./server": {
+      "types": "./dist/server/server.d.ts",
+      "import": "./dist/server/server.js"
+    },
+    "./adapters/bun": {
+      "types": "./dist/server/adapters/bun.d.ts",
+      "import": "./dist/server/adapters/bun.js"
+    }
+  },
   "scripts": {
-    "build": "npm run build:core && npm run build:bun",
-    "build:core": "tsc",
-    "build:bun": "tsc --project tsconfig.bun.json",
-    "build:deno": "tsc --project tsconfig.deno.json",
-    "dev": "tsc --watch",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "test": "bun test"
   },
   "dependencies": {
@@ -26,14 +41,34 @@
     "zod": "^4.1.12"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "keywords": [
     "websocket",
     "typescript",
     "type-safe",
-    "real-time"
+    "real-time",
+    "trpc",
+    "ws",
+    "socket",
+    "validation",
+    "zod",
+    "valibot"
   ],
-  "author": "",
-  "license": "MIT"
+  "author": "Rahul Singh <ra.singh069@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ChiChuRita/zocket.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/ChiChuRita/zocket#readme",
+  "bugs": {
+    "url": "https://github.com/ChiChuRita/zocket/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

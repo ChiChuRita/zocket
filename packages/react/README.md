@@ -29,7 +29,6 @@ const appRouter = {
         title: z.string(),
       }),
     }),
-    ß,
   },
   users: {
     joined: zo.message.outgoing({
@@ -144,6 +143,28 @@ Type-safe event listener hook (returned from `useZocket`).
 - **Auto Cleanup** - Event listeners are automatically cleaned up
 - **React Idiomatic** - Follows React patterns and best practices
 - **Zero Config** - Works out of the box with sensible defaults
+
+## Development
+
+### Running Tests
+
+```bash
+bun test
+```
+
+For watch mode:
+
+```bash
+bun test:watch
+```
+
+See [TESTING.md](./TESTING.md) for detailed testing documentation.
+
+### Building
+
+```bash
+bun run build
+```
 
 ## License
 

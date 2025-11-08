@@ -76,6 +76,8 @@ describe("Simple ping-pong example", () => {
       client.onOpen(() => {
         client.send.echo.ping({ message: "ping" });
         resolve();
+
+        client.send.echo.ping({ message: "ping" });
       });
     });
 

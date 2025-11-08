@@ -32,8 +32,10 @@ export function ZocketProvider<TRouter extends AnyRouter>({
   onOpen,
   onClose,
 }: ZocketProviderProps<TRouter>) {
-  const [client] = useState(() =>
-    createZocketClient<TRouter>(url, {
+  const clientRef = useRef<ZocketClient<TRouter> | null>(null);
+
+  if (!clientRef.current) {
+    clientRef.current = createZocketClient<TRouter>(url, {
       maxReconnectionDelay,
       minReconnectionDelay,
       reconnectionDelayGrowFactor,
@@ -42,17 +44,17 @@ export function ZocketProvider<TRouter extends AnyRouter>({
       headers,
       onOpen,
       onClose,
-    })
-  );
+    });
+  }
 
   useEffect(() => {
     return () => {
-      client.close();
+      clientRef.current?.close();
     };
-  }, [client]);
+  }, []);
 
   return (
-    <ZocketContext.Provider value={client}>
+    <ZocketContext.Provider value={clientRef.current}>
       {children}
     </ZocketContext.Provider>
   );

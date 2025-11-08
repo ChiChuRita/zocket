@@ -223,6 +223,8 @@ const appRouter = zo.router(gameRouter, {
   game: {
     join: ({ payload, ctx }) => {
       const { roomId, username } = payload;
+      console.log(`🎮 Player "${username}" joining room "${roomId}"`);
+
       if (!rooms.has(roomId)) rooms.set(roomId, createInitialRoomState());
       const state = rooms.get(roomId)!;
 
@@ -242,19 +244,21 @@ const appRouter = zo.router(gameRouter, {
       }
 
       clientToRoom.set(ctx.clientId, { roomId, side });
+      console.log(`👤 Assigned ${username} to side: ${side}`);
 
-      // notify the joining client of assigned side
+      console.log(`📤 Sending assign message to ${ctx.clientId}`);
       ctx.send.game.assign({ side }).to([ctx.clientId]);
 
-      // start loop if we have two players
       const playersCount =
         Number(Boolean(state.players.left)) +
         Number(Boolean(state.players.right));
+      console.log(`👥 Room has ${playersCount} players`);
+
       if (playersCount >= 2 && !state.loop) {
+        console.log(`🎯 Starting game loop for room ${roomId}`);
         startLoop(roomId, publish);
       }
 
-      // broadcast current state
       const payloadState = {
         ball: { x: state.ball.x, y: state.ball.y },
         paddles: { leftY: state.paddles.leftY, rightY: state.paddles.rightY },
@@ -265,6 +269,7 @@ const appRouter = zo.router(gameRouter, {
           right: state.players.rightName,
         },
       };
+      console.log(`📡 Broadcasting game state to room ${roomId}`);
       ctx.rooms.broadcast(roomId, "game.state", payloadState);
     },
     move: ({ payload, ctx }) => {

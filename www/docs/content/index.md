@@ -29,7 +29,7 @@ Build real-time applications with full TypeScript support. :br A tRPC-like exper
 
 ## Features
 
-:::card-grid
+::card-grid
 ::card{icon="lucide:shield-check"}
 #title
 Type-Safe
@@ -71,12 +71,13 @@ Middleware Support
 #description
 Composable middleware system for authentication, validation, and custom logic.
 ::
-:::
+::
 
 ## Quick Example
 
-```typescript
-// Server
+::code-group
+
+```typescript [server.ts]
 import { z } from "zod";
 import { zocket, createBunServer } from "@zocket/core";
 
@@ -109,16 +110,21 @@ const appRouter = zo.router(router, {
   },
 });
 
+export type AppRouter = typeof router;
+
 const handlers = createBunServer(appRouter, zo);
-Bun.serve({ fetch: handlers.fetch, websocket: handlers.websocket, port: 3000 });
+Bun.serve({
+  fetch: handlers.fetch,
+  websocket: handlers.websocket,
+  port: 3000,
+});
 ```
 
-```typescript
-// Client
+```typescript [client.ts]
 import { createZocketClient } from "@zocket/core";
 import type { AppRouter } from "./server";
 
-const client = createZocketClient<typeof router>("ws://localhost:3000", {
+const client = createZocketClient<AppRouter>("ws://localhost:3000", {
   headers: { user: "Alice" },
 });
 
@@ -128,6 +134,8 @@ client.on.chat.onMessage((data) => {
 
 client.send.chat.message({ text: "Hello!" });
 ```
+
+::
 
 ## Why Zocket?
 

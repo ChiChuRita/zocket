@@ -5,23 +5,40 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch"
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "bun test tests/unit/",
+    "test:watch": "bun test tests/ --watch",
+    "test:e2e": "bun test tests/e2e/",
+    "test:all": "bun test tests/"
   },
-  "dependencies": {
-    "@zocket/core": "workspace:*"
-  },
+  "dependencies": {},
   "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0"
+    "react": "^18.0.0 || ^19.0.0",
+    "@zocket/core": "^0.1.0"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.1.0",
     "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@zocket/core": "^0.1.0",
+    "happy-dom": "^15.11.7",
     "react": "^18.0.0",
-    "typescript": "^5.0.0"
+    "react-dom": "^18.0.0",
+    "typescript": "^5.0.0",
+    "zod": "^4.1.12"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "keywords": [
     "websocket",
@@ -29,8 +46,22 @@
     "hooks",
     "typescript",
     "type-safe",
-    "real-time"
+    "real-time",
+    "zocket",
+    "trpc"
   ],
-  "author": "",
-  "license": "MIT"
+  "author": "Rahul Singh <ra.singh069@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ChiChuRita/zocket.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/ChiChuRita/zocket#readme",
+  "bugs": {
+    "url": "https://github.com/ChiChuRita/zocket/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

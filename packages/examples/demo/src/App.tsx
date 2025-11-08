@@ -53,15 +53,43 @@ function GameCanvas({ username, roomId }: { username: string; roomId: string }) 
     players: {},
   });
   const [side, setSide] = useState<Side>("spectator");
+  const [isConnected, setIsConnected] = useState(false);
   const { client, useEvent } = useZocket<GameRouter>();
   const currentDirRef = useRef<"up" | "down" | "stop">("stop");
   const prevStateRef = useRef<GameState | null>(null);
   const currentStateRef = useRef<GameState | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
+  const hasJoinedRef = useRef(false);
 
   useEffect(() => {
-    client.send.game.join({ roomId, username });
-  }, [client, roomId, username]);
+    const unsubscribeOpen = client.onOpen(() => {
+      console.log("WebSocket opened, ready to send messages");
+      setIsConnected(true);
+    });
+
+    const unsubscribeClose = client.onClose(() => {
+      console.log("WebSocket closed");
+      setIsConnected(false);
+      hasJoinedRef.current = false;
+    });
+
+    if (client.readyState === WebSocket.OPEN) {
+      setIsConnected(true);
+    }
+
+    return () => {
+      unsubscribeOpen();
+      unsubscribeClose();
+    };
+  }, [client]);
+
+  useEffect(() => {
+    if (isConnected && !hasJoinedRef.current) {
+      console.log("Sending join message:", { roomId, username });
+      client.send.game.join({ roomId, username });
+      hasJoinedRef.current = true;
+    }
+  }, [isConnected, client, roomId, username]);
 
   useEvent(client.on.game.assign, (data) => {
     setSide(data.side);
@@ -126,7 +154,7 @@ function GameCanvas({ username, roomId }: { username: string; roomId: string }) 
 
       if (newDir !== currentDirRef.current) {
         currentDirRef.current = newDir;
-        client.send.game.move({ dir: newDir });
+        client.send.game.move({ dir: 'up' });
       }
     };
 
@@ -153,7 +181,9 @@ function GameCanvas({ username, roomId }: { username: string; roomId: string }) 
       <div className="header">
         <h1>Zocket Ping Pong</h1>
         <div className="status">
-          <span className="connected">● Connected</span>
+          <span className={isConnected ? "connected" : "disconnected"}>
+            ● {isConnected ? "Connected" : "Connecting..."}
+          </span>
         </div>
       </div>
 

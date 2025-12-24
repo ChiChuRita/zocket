@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "bun run --workspaces build",
-    "clean": "bun run --workspaces clean"
+    "clean": "bunx tsdown -W --clean"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { render, screen, waitFor } from '@testing-library/react';
 import React, { useState, useEffect } from 'react';
-import { ZocketProvider, useZocket } from '../../src/index';
+import { ZocketProvider, useZocket, createZocketClient } from '../../src/index';
 import { createTestServer, type PingPongRouter } from './server';
 
 let testServer: ReturnType<typeof createTestServer>;
 let serverUrl: string;
 
 beforeAll(() => {
-  testServer = createTestServer(3333);
+  testServer = createTestServer(0);
   serverUrl = testServer.url;
 });
 
@@ -21,12 +21,35 @@ describe('E2E: React Zocket with Real WebSocket', () => {
     const testMessage = 'Hello from E2E test';
     const testTimestamp = Date.now();
 
+    // capture logs during this test
+    const originalLog = console.log;
+    const logs: string[] = [];
+    console.log = (...args: any[]) => {
+      try {
+        const rendered = args
+          .map((a) => {
+            if (typeof a === 'string') return a;
+            try {
+              return JSON.stringify(a);
+            } catch {
+              return String(a);
+            }
+          })
+          .join(' ');
+        logs.push(rendered);
+      } finally {
+        // still print to stdout to aid debugging
+        originalLog(...args as any);
+      }
+    };
+
     const TestComponent = () => {
       const { client, useEvent } = useZocket<PingPongRouter>();
       const [pongReceived, setPongReceived] = useState(false);
       const [receivedData, setReceivedData] = useState<any>(null);
 
       useEvent(client.on.test.pong, (data) => {
+        console.log('🎉 client received pong:', JSON.stringify(data));
         setReceivedData(data);
         setPongReceived(true);
       });
@@ -58,26 +81,39 @@ describe('E2E: React Zocket with Real WebSocket', () => {
       );
     };
 
+    const client = createZocketClient<PingPongRouter>(serverUrl);
+
     render(
-      <ZocketProvider<PingPongRouter> url={serverUrl}>
+      <ZocketProvider<PingPongRouter> client={client}>
         <TestComponent />
       </ZocketProvider>
     );
 
-    await waitFor(
-      () => {
-        expect(screen.getByTestId('status').textContent).toBe('pong-received');
-      },
-      { timeout: 3000 }
-    );
+    try {
+      await waitFor(
+        () => {
+          expect(screen.getByTestId('status').textContent).toBe('pong-received');
+        },
+        { timeout: 3000 }
+      );
 
-    expect(screen.getByTestId('message').textContent).toBe(testMessage);
-    expect(screen.getByTestId('timestamp').textContent).toBe(
-      testTimestamp.toString()
-    );
-    expect(screen.getByTestId('server-time')).toBeDefined();
-    const serverTime = parseInt(screen.getByTestId('server-time').textContent || '0');
-    expect(serverTime).toBeGreaterThan(0);
+      expect(screen.getByTestId('message').textContent).toBe(testMessage);
+      expect(screen.getByTestId('timestamp').textContent).toBe(
+        testTimestamp.toString()
+      );
+      expect(screen.getByTestId('server-time')).toBeDefined();
+      const serverTime = parseInt(screen.getByTestId('server-time').textContent || '0');
+      expect(serverTime).toBeGreaterThan(0);
+
+      // assert logs for ping received and pong sent (server) and pong received (client)
+      const joined = logs.join('\n');
+      expect(joined).toContain('received ping');
+      expect(joined).toContain(testMessage);
+      expect(joined).toContain('sending pong');
+      expect(joined).toContain('client received pong');
+    } finally {
+      console.log = originalLog;
+    }
   });
 
   it('should handle multiple clients independently', async () => {
@@ -125,14 +161,16 @@ describe('E2E: React Zocket with Real WebSocket', () => {
       return <div data-testid="client2-count">{count}</div>;
     };
 
+    const client1 = createZocketClient<PingPongRouter>(serverUrl);
     const { container: container1 } = render(
-      <ZocketProvider<PingPongRouter> url={serverUrl}>
+      <ZocketProvider<PingPongRouter> client={client1}>
         <Client1Component />
       </ZocketProvider>
     );
 
+    const client2 = createZocketClient<PingPongRouter>(serverUrl);
     const { container: container2 } = render(
-      <ZocketProvider<PingPongRouter> url={serverUrl}>
+      <ZocketProvider<PingPongRouter> client={client2}>
         <Client2Component />
       </ZocketProvider>
     );
@@ -162,8 +200,9 @@ describe('E2E: React Zocket with Real WebSocket', () => {
       );
     };
 
+    const client = createZocketClient<PingPongRouter>(serverUrl);
     const { unmount } = render(
-      <ZocketProvider<PingPongRouter> url={serverUrl}>
+      <ZocketProvider<PingPongRouter> client={client}>
         <TestComponent />
       </ZocketProvider>
     );

@@ -6,20 +6,23 @@ import type {
   RequestLike,
   UpgradeResult,
   ServerLike,
+  ZocketServer,
 } from "./types";
 import type { AnyRouter } from "../core/types";
 import type { Sender, ZocketContext, RoomOperations } from "./context";
 import { createBunHandlers } from "./adapters/bun";
+import { flattenRouter } from "../core/router";
+import { requestContext } from "../core/context-store"; // Import the store
 
 function generateClientId(): string {
   return `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-function createSendProxy(
+function createSendProxy<TRouter extends AnyRouter>(
   clientId: string,
   clientConnections: Map<string, WebSocketAdapter>,
   serverPublishRef?: { fn?: (topic: string, message: string) => void }
-): Sender<AnyRouter> {
+): Sender<TRouter> {
   const createInnerProxy = (path: string[]): any => {
     const sender = (payload: unknown) => {
       const route = path.join(".");
@@ -67,7 +70,7 @@ function createSendProxy(
       get: (_target, prop: string) => createInnerProxy([...path, prop]),
     });
   };
-  return createInnerProxy([]);
+  return createInnerProxy([]) as Sender<TRouter>;
 }
 
 type HandlerMaps = {
@@ -188,7 +191,7 @@ function createOpenHandler<
         has: (roomId: string) => rooms.has(roomId),
       };
 
-      const sendProxy = createSendProxy(
+      const sendProxy = createSendProxy<AnyRouter>(
         clientId,
         clientConnections,
         serverPublishRef
@@ -297,7 +300,11 @@ function createMessageHandler<TUserContext>(
           ...ctx,
           ...mergedCtxAdditions,
         } as ZocketContext<any, AnyRouter>;
-        await handler({ payload: parsedPayload, ctx: finalCtx });
+
+        // Wrap execution in AsyncLocalStorage
+        await requestContext.run(finalCtx, async () => {
+          await handler({ payload: parsedPayload, ctx: finalCtx });
+        });
       } else if (!handler) {
         console.warn(`SERVER: No handler found for message type: "${type}"`);
       }
@@ -340,13 +347,14 @@ function createCloseHandler<
 
 export function createServer<
   THeadersSchema extends StandardSchemaV1,
-  TUserContext
+  TUserContext,
+  TRouter extends AnyRouter
 >(
-  router: Record<string, any>,
+  router: TRouter,
   zocket: Zocket<THeadersSchema, TUserContext>,
   adapter: ServerAdapter,
   options: { port?: number; hostname?: string } = {}
-): ServerLike {
+): ZocketServer<TRouter> {
   const clientConnections = new Map<string, WebSocketAdapter>();
   const clientContexts = new Map<
     string,
@@ -355,7 +363,11 @@ export function createServer<
   const clientRooms = new Map<string, Set<string>>();
   const pendingContexts = new Map<string, Promise<void>>();
 
-  const { handlerMap, metaMap } = initializeHandlerMaps(router);
+  const flatRouter: Record<string, any> = {};
+  const legacyHandlers = (router as any).__handlers;
+  flattenRouter(router, legacyHandlers, [], flatRouter);
+
+  const { handlerMap, metaMap } = initializeHandlerMaps(flatRouter);
 
   const serverPublishRef = {
     fn: undefined as ((topic: string, message: string) => void) | undefined,
@@ -392,15 +404,23 @@ export function createServer<
     serverPublishRef.fn = serverPublish;
   }
 
+  const send = createSendProxy<TRouter>(
+    "server",
+    clientConnections,
+    serverPublishRef
+  );
+  (server as ZocketServer<TRouter>).send = send;
+
   console.log(`SERVER: Listening on http://localhost:${server.port}`);
 
-  return server;
+  return server as ZocketServer<TRouter>;
 }
 
 export function createBunServer<
   THeadersSchema extends StandardSchemaV1,
-  TUserContext
->(router: Record<string, any>, zocket: Zocket<THeadersSchema, TUserContext>) {
+  TUserContext,
+  TRouter extends AnyRouter
+>(router: TRouter, zocket: Zocket<THeadersSchema, TUserContext>) {
   const clientConnections = new Map<string, WebSocketAdapter>();
   const clientContexts = new Map<
     string,
@@ -409,7 +429,11 @@ export function createBunServer<
   const clientRooms = new Map<string, Set<string>>();
   const pendingContexts = new Map<string, Promise<void>>();
 
-  const { handlerMap, metaMap } = initializeHandlerMaps(router);
+  const flatRouter: Record<string, any> = {};
+  const legacyHandlers = (router as any).__handlers;
+  flattenRouter(router, legacyHandlers, [], flatRouter);
+
+  const { handlerMap, metaMap } = initializeHandlerMaps(flatRouter);
 
   const serverPublishRef = {
     fn: undefined as ((topic: string, message: string) => void) | undefined,
@@ -441,5 +465,11 @@ export function createBunServer<
 
   serverPublishRef.fn = handlers.publish;
 
-  return handlers;
+  const send = createSendProxy<TRouter>(
+    "server",
+    clientConnections,
+    serverPublishRef
+  );
+
+  return { ...handlers, send };
 }

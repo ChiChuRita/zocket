@@ -37,13 +37,20 @@ export type PingPongRouter = typeof pingPongRouter;
 const appRouter = zo.router(pingPongRouter, {
   test: {
     ping: ({ payload, ctx }) => {
-      ctx.send.test
-        .pong({
-          message: payload.message,
-          timestamp: payload.timestamp,
-          serverTime: Date.now(),
-        })
-        .to([ctx.clientId]);
+      console.log(
+        `📩 received ping from ${ctx.clientId}:`,
+        JSON.stringify(payload)
+      );
+      const responsePayload = {
+        message: payload.message,
+        timestamp: payload.timestamp,
+        serverTime: Date.now(),
+      };
+      console.log(
+        `📤 sending pong to ${ctx.clientId}:`,
+        JSON.stringify(responsePayload)
+      );
+      ctx.send.test.pong(responsePayload).to([ctx.clientId]);
     },
   },
 });
@@ -69,5 +76,3 @@ export function createTestServer(port: number = 3333) {
     },
   };
 }
-
-

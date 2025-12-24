@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { z } from "zod";
 import { zocket, createBunServer } from "../src/index";
-import { createZocketClient } from "../src/client/client";
+import { createZocketClient } from "@zocket/client";
 
 describe("Fluent API demonstration", () => {
   let server: any;
@@ -13,6 +13,7 @@ describe("Fluent API demonstration", () => {
       userRole: z.enum(["admin", "moderator", "user"]).default("user"),
     }),
     onConnect: (headers, clientId) => {
+      console.log(`✅ ${headers.userName} connected - ${clientId}`);
       return {
         userName: headers.userName,
         userRole: headers.userRole,
@@ -26,180 +27,178 @@ describe("Fluent API demonstration", () => {
   const protectedMessage = zo.message.use(({ ctx }) => {
     const role = ctx.userRole;
     if (role === "admin" || role === "moderator") {
-      return { isPrivileged: true as const };
+      return { isPrivileged: true as const, name: "John Doe" };
     }
     throw new Error("Forbidden");
   });
 
-  const fluentRouter = {
-    system: {
-      announcement: protectedMessage.incoming({
-        payload: z.object({ message: z.string() }),
-      }),
-      onAnnouncement: zo.message.outgoing({
-        payload: z.object({
+  const appRouter = zo
+    .router()
+    .outgoing({
+      system: {
+        onAnnouncement: z.object({
           message: z.string(),
           from: z.string(),
           timestamp: z.date(),
         }),
-      }),
-    },
-
-    chat: {
-      private: zo.message.incoming({
-        payload: z.object({
-          targetUserId: z.string(),
-          message: z.string(),
-        }),
-      }),
-      room: zo.message.incoming({
-        payload: z.object({
-          roomId: z.string(),
-          message: z.string(),
-        }),
-      }),
-      onPrivate: zo.message.outgoing({
-        payload: z.object({
+      },
+      chat: {
+        onPrivate: z.object({
           from: z.string(),
           message: z.string(),
           timestamp: z.date(),
         }),
-      }),
-      onRoom: zo.message.outgoing({
-        payload: z.object({
+        onRoom: z.object({
           roomId: z.string(),
           from: z.string(),
           message: z.string(),
           timestamp: z.date(),
         }),
-      }),
-    },
-
-    notification: {
-      send: zo.message.incoming({
-        payload: z.object({
-          type: z.enum(["info", "warning", "error"]),
-          message: z.string(),
-          targets: z.array(z.string()).optional(),
-          rooms: z.array(z.string()).optional(),
-          broadcast: z.boolean().optional(),
-        }),
-      }),
-      onReceive: zo.message.outgoing({
-        payload: z.object({
+      },
+      notification: {
+        onReceive: z.object({
           type: z.enum(["info", "warning", "error"]),
           message: z.string(),
           timestamp: z.date(),
         }),
-      }),
-    },
-
-    connection: {
-      getClientId: zo.message.incoming({
-        payload: z.object({}),
-      }),
-      onClientId: zo.message.outgoing({
-        payload: z.object({
+      },
+      connection: {
+        onClientId: z.object({
           clientId: z.string(),
         }),
-      }),
-    },
+      },
+    })
+    .incoming(({ send }) => ({
+      system: {
+        announcement: protectedMessage
+          .input(z.object({ message: z.string() }))
+          .handle(({ ctx, input }) => {
+            const userName = ctx.userName;
+            console.log(
+              `📢 [System] Announcement from ${userName}: "${input.message}"`
+            );
 
-    rooms: {
-      join: zo.message.incoming({
-        payload: z.object({
-          roomId: z.string(),
+            send.system
+              .onAnnouncement({
+                message: input.message,
+                from: userName,
+                timestamp: new Date(),
+              })
+              .broadcast();
+          }),
+      },
+
+      chat: {
+        private: zo.message
+          .input(
+            z.object({
+              targetUserId: z.string(),
+              message: z.string(),
+            })
+          )
+          .handle(({ ctx, input }) => {
+            const userName = ctx.userName;
+            console.log(
+              `📨 [Chat] Private message from ${userName} to ${input.targetUserId}: "${input.message}"`
+            );
+
+            send.chat
+              .onPrivate({
+                from: userName,
+                message: input.message,
+                timestamp: new Date(),
+              })
+              .to([input.targetUserId]);
+          }),
+
+        room: zo.message
+          .input(
+            z.object({
+              roomId: z.string(),
+              message: z.string(),
+            })
+          )
+          .handle(({ ctx, input }) => {
+            const userName = ctx.userName;
+            console.log(
+              `🏘️ [Room] Message from ${userName} in ${input.roomId}: "${input.message}"`
+            );
+
+            send.chat
+              .onRoom({
+                roomId: input.roomId,
+                from: userName,
+                message: input.message,
+                timestamp: new Date(),
+              })
+              .toRoom([input.roomId]);
+          }),
+      },
+
+      notification: {
+        send: zo.message
+          .input(
+            z.object({
+              type: z.enum(["info", "warning", "error"]),
+              message: z.string(),
+              targets: z.array(z.string()).optional(),
+              rooms: z.array(z.string()).optional(),
+              broadcast: z.boolean().optional(),
+            })
+          )
+          .handle(({ ctx, input }) => {
+            const userName = ctx.userName;
+            const role = ctx.userRole;
+
+            if (role !== "admin" && role !== "moderator") {
+              console.log(
+                `🚫 ${userName} tried to send notification but lacks permission`
+              );
+              return;
+            }
+
+            console.log(
+              `🔔 [Notification] Sending ${input.type} notification: "${input.message}"`
+            );
+
+            const notification = {
+              type: input.type,
+              message: input.message,
+              timestamp: new Date(),
+            };
+
+            if (input.broadcast) {
+              send.notification.onReceive(notification).broadcast();
+            } else if (input.targets?.length) {
+              send.notification.onReceive(notification).to(input.targets);
+            } else if (input.rooms?.length) {
+              send.notification.onReceive(notification).toRoom(input.rooms);
+            }
+          }),
+      },
+
+      connection: {
+        getClientId: zo.message.input(z.object({})).handle(({ ctx }) => {
+          send.connection
+            .onClientId({ clientId: ctx.clientId })
+            .to([ctx.clientId]);
         }),
-      }),
-    },
-  };
-
-  type FluentRouter = typeof fluentRouter;
-
-  const appRouter = zo.router(fluentRouter, {
-    system: {
-      announcement: ({ payload, ctx }) => {
-        const userName = ctx.userName;
-
-        ctx.send.system
-          .onAnnouncement({
-            message: payload.message,
-            from: userName,
-            timestamp: new Date(),
-          })
-          .broadcast();
-      },
-    },
-
-    chat: {
-      private: ({ payload, ctx }) => {
-        const userName = ctx.userName;
-
-        ctx.send.chat
-          .onPrivate({
-            from: userName,
-            message: payload.message,
-            timestamp: new Date(),
-          })
-          .to([payload.targetUserId]);
       },
 
-      room: ({ payload, ctx }) => {
-        const userName = ctx.userName;
-
-        ctx.send.chat
-          .onRoom({
-            roomId: payload.roomId,
-            from: userName,
-            message: payload.message,
-            timestamp: new Date(),
-          })
-          .toRoom([payload.roomId]);
+      rooms: {
+        join: zo.message
+          .input(
+            z.object({
+              roomId: z.string(),
+            })
+          )
+          .handle(({ ctx, input }) => {
+            ctx.rooms.join(input.roomId);
+          }),
       },
-    },
+    }));
 
-    notification: {
-      send: ({ payload, ctx }) => {
-        const userName = ctx.userName;
-        const role = ctx.userRole;
-
-        if (role !== "admin" && role !== "moderator") {
-          console.log(
-            `🚫 ${userName} tried to send notification but lacks permission`
-          );
-          return;
-        }
-
-        const notification = {
-          type: payload.type,
-          message: payload.message,
-          timestamp: new Date(),
-        };
-
-        if (payload.broadcast) {
-          ctx.send.notification.onReceive(notification).broadcast();
-        } else if (payload.targets?.length) {
-          ctx.send.notification.onReceive(notification).to(payload.targets);
-        } else if (payload.rooms?.length) {
-          ctx.send.notification.onReceive(notification).toRoom(payload.rooms);
-        }
-      },
-    },
-
-    connection: {
-      getClientId: ({ ctx }) => {
-        ctx.send.connection
-          .onClientId({ clientId: ctx.clientId })
-          .to([ctx.clientId]);
-      },
-    },
-
-    rooms: {
-      join: ({ payload, ctx }) => {
-        ctx.rooms.join(payload.roomId);
-      },
-    },
-  });
+  type FluentRouter = typeof appRouter;
 
   beforeAll(() => {
     const handlers = createBunServer(appRouter, zo);
@@ -233,6 +232,9 @@ describe("Fluent API demonstration", () => {
 
     const announcementPromise = new Promise<string>((resolve) => {
       user.on.system.onAnnouncement((data) => {
+        console.log(
+          `📥 [User Client] Received announcement: "${data.message}"`
+        );
         resolve(data.message);
       });
     });
@@ -288,6 +290,9 @@ describe("Fluent API demonstration", () => {
       message: string;
     }>((resolve) => {
       bob.on.chat.onPrivate((data) => {
+        console.log(
+          `📥 [Bob Client] Received private message from ${data.from}: "${data.message}"`
+        );
         resolve({ from: data.from, message: data.message });
       });
     });
@@ -344,6 +349,9 @@ describe("Fluent API demonstration", () => {
       message: string;
     }>((resolve) => {
       bob.on.chat.onRoom((data) => {
+        console.log(
+          `📥 [Bob Client] Received room message from ${data.from} in ${data.roomId}: "${data.message}"`
+        );
         resolve({
           roomId: data.roomId,
           from: data.from,
@@ -401,6 +409,9 @@ describe("Fluent API demonstration", () => {
       message: string;
     }>((resolve) => {
       user.on.notification.onReceive((data) => {
+        console.log(
+          `📥 [User Client] Received notification: "${data.message}"`
+        );
         resolve({ type: data.type, message: data.message });
       });
     });

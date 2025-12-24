@@ -78,15 +78,27 @@ Bun.serve({
 });
 ```
 
+### Server-initiated messages (push)
+
+You can send outgoing messages from anywhere in your server code (cron jobs, DB listeners, admin tools, etc.) using `handlers.send`:
+
+```typescript
+handlers.send.chat
+  .onMessage({ text: "Hello from the server!", from: "system" })
+  .broadcast();
+```
+
 ### Client (React)
 
 ```tsx
-import { ZocketProvider, useZocket } from "@zocket/react";
+import { ZocketProvider, useZocket, createZocketClient } from "@zocket/react";
 import type { AppRouter } from "./server";
+
+const zocketClient = createZocketClient<AppRouter>("ws://localhost:3000");
 
 function App() {
   return (
-    <ZocketProvider<typeof router> url="ws://localhost:3000">
+    <ZocketProvider<typeof router> client={zocketClient}>
       <ChatComponent />
     </ZocketProvider>
   );

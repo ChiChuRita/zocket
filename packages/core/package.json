@@ -10,10 +10,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./client": {
-      "types": "./dist/client/client.d.ts",
-      "import": "./dist/client/client.js"
-    },
     "./server": {
       "types": "./dist/server/server.d.ts",
       "import": "./dist/server/server.js"
@@ -35,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@zocket/client": "workspace:*",
     "bun-types": "latest",
     "typescript": "^5.0.0",
     "valibot": "^1.1.0",

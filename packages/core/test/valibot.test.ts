@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import * as v from "valibot";
 import { zocket, createBunServer } from "../src/index";
-import { createZocketClient } from "../src/client/client";
+import { createZocketClient } from "@zocket/client";
 
 describe("Valibot validator integration", () => {
   let server: any;
@@ -21,31 +21,31 @@ describe("Valibot validator integration", () => {
     },
   });
 
-  const valibotRouter = {
-    echo: {
-      ping: zo.message.incoming({
-        payload: v.object({
-          message: v.optional(v.string(), "ping"),
-        }),
-      }),
-      onPong: zo.message.outgoing({
-        payload: v.object({
+  const appRouter = zo
+    .router()
+    .outgoing({
+      echo: {
+        onPong: v.object({
           reply: v.string(),
         }),
-      }),
-    },
-  };
-
-  type ValibotRouter = typeof valibotRouter;
-
-  const appRouter = zo.router(valibotRouter, {
-    echo: {
-      ping: ({ payload, ctx }) => {
-        const reply = `pong: ${payload.message}`;
-        ctx.send.echo.onPong({ reply }).to([ctx.clientId]);
       },
-    },
-  });
+    })
+    .incoming(({ send }) => ({
+      echo: {
+        ping: zo.message
+          .input(
+            v.object({
+              message: v.optional(v.string(), "ping"),
+            })
+          )
+          .handle(({ ctx, input }) => {
+            const reply = `pong: ${input.message}`;
+            send.echo.onPong({ reply }).to([ctx.clientId]);
+          }),
+      },
+    }));
+
+  type ValibotRouter = typeof appRouter;
 
   beforeAll(() => {
     const handlers = createBunServer(appRouter, zo);

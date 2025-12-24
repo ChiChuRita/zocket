@@ -79,6 +79,16 @@ Bun.serve({
 });
 ```
 
+### Server-initiated messages (push)
+
+You can send outgoing messages from anywhere in your server code (cron jobs, DB listeners, admin tools, etc.) using `handlers.send`:
+
+```typescript
+handlers.send.chat
+  .onMessage({ text: "Hello from the server!", from: "system" })
+  .broadcast();
+```
+
 ### Client Setup
 
 ```typescript

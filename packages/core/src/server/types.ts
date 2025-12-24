@@ -1,3 +1,6 @@
+import type { AnyRouter } from "../core/types";
+import type { Sender } from "./context";
+
 export interface WebSocketAdapter {
   send(message: string): void;
   close(): void;
@@ -22,6 +25,10 @@ export interface ServerLike {
   stop(force?: boolean): void;
   publish?(topic: string, message: string): void;
 }
+
+export type ZocketServer<TRouter extends AnyRouter> = ServerLike & {
+  send: Sender<TRouter>;
+};
 
 export interface ServerAdapter {
   start(options: {

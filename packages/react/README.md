@@ -40,19 +40,21 @@ const appRouter = {
 export type AppRouter = typeof appRouter;
 ```
 
-### 2. Wrap your app with ZocketProvider
+### 2. Create a client and wrap your app
 
 ```tsx
-import { ZocketProvider } from "@zocket/react";
+import { ZocketProvider, createZocketClient } from "@zocket/react";
 import type { AppRouter } from "./server";
+
+const zocketClient = createZocketClient<AppRouter>("ws://localhost:3000", {
+  headers: { user: "alice" },
+  onOpen: () => console.log("Connected!"),
+  onClose: () => console.log("Disconnected"),
+});
 
 function App() {
   return (
-    <ZocketProvider<AppRouter>
-      url="ws://localhost:3000"
-      onOpen={() => console.log("Connected!")}
-      onClose={() => console.log("Disconnected")}
-    >
+    <ZocketProvider<AppRouter> client={zocketClient}>
       <YourApp />
     </ZocketProvider>
   );
@@ -96,20 +98,19 @@ function ChatComponent() {
 
 ### `<ZocketProvider>`
 
-Provider component that creates and manages a WebSocket connection.
+Provider component that shares a `ZocketClient` instance with React children.
 
 **Props:**
 
-- `url: string` - WebSocket URL to connect to
+- `client: ZocketClient<TRouter>` - A pre-configured client instance (create one with `createZocketClient`)
 - `children: ReactNode` - React children
-- `maxReconnectionDelay?: number` - Max delay between reconnection attempts (default: 10000ms)
-- `minReconnectionDelay?: number` - Min delay between reconnection attempts (default: 1000ms)
-- `reconnectionDelayGrowFactor?: number` - Growth factor for reconnection delay (default: 1.3)
-- `maxRetries?: number` - Maximum reconnection attempts (default: Infinity)
-- `debug?: boolean` - Enable debug logging (default: false)
-- `headers?: Record<string, string>` - Custom headers for connection
-- `onOpen?: () => void` - Callback when connection opens
-- `onClose?: () => void` - Callback when connection closes
+- `disconnectOnUnmount?: boolean` - Close the client when the provider unmounts (default: `true`)
+
+> 💡 This mirrors React Query’s `QueryClientProvider`: create the client once (module scope, context provider, or `useState`) and reuse it.
+
+### `createZocketClient<TRouter>(url, options?)`
+
+Factory that builds a type-safe client. It’s re-exported from `@zocket/client` for convenience. Options include reconnection delays, headers, debug logging, and lifecycle callbacks.
 
 ### `useZocket<TRouter>()`
 
@@ -118,9 +119,9 @@ Hook to access the Zocket client and event listener.
 **Returns:**
 
 - `client: ZocketClient<TRouter>` - The Zocket client instance for sending messages
-- `useEvent: (event, handler) => void` - Hook for type-safe event listening
+- `useEvent: (subscribe, handler, deps?) => void` - Hook for type-safe event listening
 
-### `useEvent(subscribeFn, handler)`
+### `useEvent(subscribeFn, handler, deps?)`
 
 Type-safe event listener hook (returned from `useZocket`).
 
@@ -128,6 +129,7 @@ Type-safe event listener hook (returned from `useZocket`).
 
 - `subscribeFn: (callback) => UnsubscribeFn` - Subscription function from `client.on` (e.g., `client.on.posts.created`)
 - `handler: (payload) => void` - Event handler (payload is fully typed and automatically inferred)
+- `deps?: React.DependencyList` - Optional dependency list to re-subscribe when dynamic values change (e.g., room IDs)
 
 **Features:**
 

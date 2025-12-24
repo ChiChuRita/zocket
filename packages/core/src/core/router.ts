@@ -30,13 +30,23 @@ export function flattenRouter(
 
     if (isMessageDef(value)) {
       const flatKey = nextPath.join(".");
-      const handler =
+
+      // Check external handler (old API)
+      let handler =
         handlers && typeof handlers === "object"
           ? (handlers as any)[key]
           : undefined;
+
+      // Check inline handler (new API)
+      if (!handler && typeof (value as any).handler === "function") {
+        handler = (value as any).handler;
+      }
+
       const entry: Record<string, any> = { payload: (value as any).payload };
+
       if ((value as any)._middlewares)
         entry._middlewares = (value as any)._middlewares;
+
       if ((value as any)._direction === "in" && typeof handler === "function") {
         entry.handler = handler;
       }

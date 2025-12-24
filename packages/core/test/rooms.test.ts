@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { z } from "zod";
 import { zocket, createBunServer } from "../src/index";
-import { createZocketClient } from "../src/client/client";
+import { createZocketClient } from "@zocket/client";
 
 describe("Multi-client room functionality", () => {
   let server: any;
@@ -24,95 +24,93 @@ describe("Multi-client room functionality", () => {
     },
   });
 
-  const chatRouter = {
-    rooms: {
-      join: zo.message.incoming({
-        payload: z.object({
-          roomId: z.string(),
-        }),
-      }),
-      leave: zo.message.incoming({
-        payload: z.object({
-          roomId: z.string(),
-        }),
-      }),
-      message: zo.message.incoming({
-        payload: z.object({
-          roomId: z.string(),
-          content: z.string(),
-        }),
-      }),
-      onJoin: zo.message.outgoing({
-        payload: z.object({
+  const appRouter = zo
+    .router()
+    .outgoing({
+      rooms: {
+        onJoin: z.object({
           roomId: z.string(),
           userName: z.string(),
         }),
-      }),
-      onLeave: zo.message.outgoing({
-        payload: z.object({
+        onLeave: z.object({
           roomId: z.string(),
           userName: z.string(),
         }),
-      }),
-      onMessage: zo.message.outgoing({
-        payload: z.object({
+        onMessage: z.object({
           roomId: z.string(),
           userName: z.string(),
           content: z.string(),
-          timestamp: z.date(),
+          timestamp: z.string(),
         }),
-      }),
-    },
-  };
-
-  type ChatRouter = typeof chatRouter;
-
-  const appRouter = zo.router(chatRouter, {
-    rooms: {
-      join: ({ payload, ctx }) => {
-        const userName = ctx["user-name"];
-        ctx.rooms.join(payload.roomId);
-
-        ctx.send.rooms
-          .onJoin({
-            roomId: payload.roomId,
-            userName,
-          })
-          .toRoom([payload.roomId]);
       },
-      leave: ({ payload, ctx }) => {
-        const userName = ctx["user-name"];
+    })
+    .incoming(({ send }) => ({
+      rooms: {
+        join: zo.message
+          .input(
+            z.object({
+              roomId: z.string(),
+            })
+          )
+          .handle(({ ctx, input }) => {
+            const userName = ctx["user-name"];
+            ctx.rooms.join(input.roomId);
 
-        ctx.send.rooms
-          .onLeave({
-            roomId: payload.roomId,
-            userName,
-          })
-          .toRoom([payload.roomId]);
+            send.rooms
+              .onJoin({
+                roomId: input.roomId,
+                userName,
+              })
+              .toRoom([input.roomId]);
+          }),
+        leave: zo.message
+          .input(
+            z.object({
+              roomId: z.string(),
+            })
+          )
+          .handle(({ ctx, input }) => {
+            const userName = ctx["user-name"];
 
-        ctx.rooms.leave(payload.roomId);
+            send.rooms
+              .onLeave({
+                roomId: input.roomId,
+                userName,
+              })
+              .toRoom([input.roomId]);
+
+            ctx.rooms.leave(input.roomId);
+          }),
+        message: zo.message
+          .input(
+            z.object({
+              roomId: z.string(),
+              content: z.string(),
+            })
+          )
+          .handle(({ ctx, input }) => {
+            const userName = ctx["user-name"];
+
+            if (!ctx.rooms.has(input.roomId)) {
+              console.log(
+                `🚫 ${userName} tried to send message to ${input.roomId} without joining`
+              );
+              return;
+            }
+
+            send.rooms
+              .onMessage({
+                roomId: input.roomId,
+                userName,
+                content: input.content,
+                timestamp: new Date().toISOString(),
+              })
+              .toRoom([input.roomId]);
+          }),
       },
-      message: ({ payload, ctx }) => {
-        const userName = ctx["user-name"];
+    }));
 
-        if (!ctx.rooms.has(payload.roomId)) {
-          console.log(
-            `🚫 ${userName} tried to send message to ${payload.roomId} without joining`
-          );
-          return;
-        }
-
-        ctx.send.rooms
-          .onMessage({
-            roomId: payload.roomId,
-            userName,
-            content: payload.content,
-            timestamp: new Date(),
-          })
-          .toRoom([payload.roomId]);
-      },
-    },
-  });
+  type ChatRouter = typeof appRouter;
 
   beforeAll(() => {
     const handlers = createBunServer(appRouter, zo);

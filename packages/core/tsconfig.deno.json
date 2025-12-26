@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": [],
+    "lib": ["ES2020", "deno.window"],
+    "noEmit": true
+  },
+  "include": ["src/adapters/types.ts", "src/adapters/deno.ts"]
+}

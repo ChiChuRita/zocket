@@ -28,7 +28,9 @@ export type ZocketClient<TRouter extends AnyRouter> = {
   on: ClientOn<TRouter>;
   onOpen: (callback: () => void) => () => void;
   onClose: (callback: () => void) => () => void;
+  onError: (callback: (error: unknown) => void) => () => void;
   close: () => void;
   reconnect: () => void;
   readonly readyState: number;
+  readonly lastError: unknown | null;
 };

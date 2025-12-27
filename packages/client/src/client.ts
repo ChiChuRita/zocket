@@ -29,10 +29,6 @@ function isValidMessage(data: unknown): data is Message {
 export function createZocketClient<TRouter extends AnyRouter>(
   url: string,
   options?: {
-    maxReconnectionDelay?: number;
-    minReconnectionDelay?: number;
-    reconnectionDelayGrowFactor?: number;
-    maxRetries?: number;
     debug?: boolean;
     headers?: Record<string, string>;
     onOpen?: () => void;
@@ -43,6 +39,8 @@ export function createZocketClient<TRouter extends AnyRouter>(
   const eventListeners = new Map<string, Set<MessageCallback>>();
   const openListeners = new Set<() => void>();
   const closeListeners = new Set<() => void>();
+  const errorListeners = new Set<(error: unknown) => void>();
+  let lastError: unknown | null = null;
 
   const WebSocketImpl = globalThis.WebSocket;
 
@@ -80,6 +78,8 @@ export function createZocketClient<TRouter extends AnyRouter>(
   };
 
   const attachSocket = () => {
+    // Starting a new connection attempt: clear previous error.
+    lastError = null;
     const ws = new WebSocketImpl(wsUrl.toString());
     socket = ws;
     ws.binaryType = "arraybuffer";
@@ -90,6 +90,7 @@ export function createZocketClient<TRouter extends AnyRouter>(
         return;
       }
       log("Connected");
+      lastError = null;
       options?.onOpen?.();
       openListeners.forEach((cb) => cb());
     });
@@ -104,7 +105,12 @@ export function createZocketClient<TRouter extends AnyRouter>(
     });
 
     ws.addEventListener("error", (err) => {
+      if (socket !== ws) {
+        return;
+      }
+      lastError = err;
       error("WebSocket error:", err);
+      errorListeners.forEach((cb) => cb(err));
     });
 
     ws.addEventListener("message", (event) => {
@@ -167,24 +173,45 @@ export function createZocketClient<TRouter extends AnyRouter>(
     return () => listeners.delete(callback);
   };
 
+  /**
+   * IMPORTANT FOR REACT:
+   * We cache proxy chains so expressions like `client.on.chat.onMessage`
+   * have stable identity across renders (avoids unnecessary resubscribe loops).
+   */
+  const proxyCache = new Map<string, any>();
+
   const createProxy = (path: string[]): any => {
-    return new Proxy(() => {}, {
-      get: (_target, prop: string) => createProxy([...path, prop]),
+    const key = path.join(".");
+    const cached = proxyCache.get(key);
+    if (cached) return cached;
+
+    const proxy = new Proxy(() => {}, {
+      get: (target, prop: string | symbol, receiver) => {
+        // Avoid "thenable" behavior (can confuse Promise/await utilities)
+        if (prop === "then") return undefined;
+        if (typeof prop !== "string") {
+          return Reflect.get(target, prop, receiver);
+        }
+        return createProxy([...path, prop]);
+      },
       apply: (_target, _thisArg, args) => {
-        const [callback] = args;
+        const [arg0] = args;
         const [command, ...routeParts] = path;
         const route = routeParts.join(".");
 
         if (command === COMMANDS.SEND) {
-          sendMessage(route, callback);
+          sendMessage(route, arg0);
           return;
         }
 
         if (command === COMMANDS.ON) {
-          return subscribeToEvent(route, callback);
+          return subscribeToEvent(route, arg0);
         }
       },
     });
+
+    proxyCache.set(key, proxy);
+    return proxy;
   };
 
   return {
@@ -197,6 +224,10 @@ export function createZocketClient<TRouter extends AnyRouter>(
     onClose: (callback: () => void) => {
       closeListeners.add(callback);
       return () => closeListeners.delete(callback);
+    },
+    onError: (callback: (error: unknown) => void) => {
+      errorListeners.add(callback);
+      return () => errorListeners.delete(callback);
     },
     close: () => {
       if (!socket) {
@@ -238,6 +269,9 @@ export function createZocketClient<TRouter extends AnyRouter>(
     },
     get readyState() {
       return socket?.readyState ?? WebSocketImpl.CLOSED;
+    },
+    get lastError() {
+      return lastError;
     },
   };
 }

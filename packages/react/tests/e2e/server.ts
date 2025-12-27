@@ -14,46 +14,46 @@ const zo = zocket.create({
   },
 });
 
-const pingPongRouter = {
-  test: {
-    ping: zo.message.incoming({
-      payload: z.object({
-        message: z.string(),
-        timestamp: z.number(),
-      }),
-    }),
-    pong: zo.message.outgoing({
-      payload: z.object({
+export const appRouter = zo
+  .router()
+  .outgoing({
+    test: {
+      pong: z.object({
         message: z.string(),
         timestamp: z.number(),
         serverTime: z.number(),
       }),
-    }),
-  },
-};
-
-export type PingPongRouter = typeof pingPongRouter;
-
-const appRouter = zo.router(pingPongRouter, {
-  test: {
-    ping: ({ payload, ctx }) => {
-      console.log(
-        `📩 received ping from ${ctx.clientId}:`,
-        JSON.stringify(payload)
-      );
-      const responsePayload = {
-        message: payload.message,
-        timestamp: payload.timestamp,
-        serverTime: Date.now(),
-      };
-      console.log(
-        `📤 sending pong to ${ctx.clientId}:`,
-        JSON.stringify(responsePayload)
-      );
-      ctx.send.test.pong(responsePayload).to([ctx.clientId]);
     },
-  },
-});
+  })
+  .incoming(({ send }) => ({
+    test: {
+      ping: zo.message
+        .input(
+          z.object({
+            message: z.string(),
+            timestamp: z.number(),
+          })
+        )
+        .handle(({ ctx, input }) => {
+          console.log(
+            `📩 received ping from ${ctx.clientId}:`,
+            JSON.stringify(input)
+          );
+          const responsePayload = {
+            message: input.message,
+            timestamp: input.timestamp,
+            serverTime: Date.now(),
+          };
+          console.log(
+            `📤 sending pong to ${ctx.clientId}:`,
+            JSON.stringify(responsePayload)
+          );
+          send.test.pong(responsePayload).to([ctx.clientId]);
+        }),
+    },
+  }));
+
+export type PingPongRouter = typeof appRouter;
 
 export function createTestServer(port: number = 3333) {
   const handlers = createBunServer(appRouter, zo);

@@ -60,8 +60,6 @@ describe("Simple ping-pong example", () => {
   test("client can send ping and receive pong", async () => {
     const client = createZocketClient<SimpleRouter>(`ws://127.0.0.1:${port}`, {
       headers: { user: "tester" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
@@ -89,8 +87,6 @@ describe("Simple ping-pong example", () => {
   test("server can push pong without receiving ping", async () => {
     const client = createZocketClient<SimpleRouter>(`ws://127.0.0.1:${port}`, {
       headers: { user: "server-push-tester" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
@@ -116,8 +112,6 @@ describe("Simple ping-pong example", () => {
   test("client can send custom message and receive pong", async () => {
     const client = createZocketClient<SimpleRouter>(`ws://127.0.0.1:${port}`, {
       headers: { user: "custom-tester" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 

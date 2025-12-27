@@ -92,7 +92,12 @@ handlers.send.chat
 
 ```tsx
 import { useState } from "react";
-import { ZocketProvider, useZocket, createZocketClient } from "@zocket/react";
+import {
+  ZocketProvider,
+  useZocket,
+  useConnectionState,
+  createZocketClient,
+} from "@zocket/react";
 import type { AppRouter } from "./server";
 
 const zocketClient = createZocketClient<AppRouter>("ws://localhost:3000", {
@@ -110,16 +115,19 @@ function App() {
 
 function ChatComponent() {
   const { client, useEvent } = useZocket<AppRouter>();
+  const { status } = useConnectionState(client);
   const [messages, setMessages] = useState<
     Array<{ text: string; from: string }>
   >([]);
 
+  // `client.on.*` subscriptions are stable (cached), so this won’t resubscribe every render.
   useEvent(client.on.chat.onMessage, (data) => {
     setMessages((prev) => [...prev, data]);
   });
 
   return (
     <div>
+      <div>Connection: {status}</div>
       {messages.map((msg, i) => (
         <div key={i}>
           {msg.from}: {msg.text}

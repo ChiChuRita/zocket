@@ -123,7 +123,7 @@ Provider component that shares a `ZocketClient` instance with React children.
 
 ### `createZocketClient<TRouter>(url, options?)`
 
-Factory that builds a type-safe client. It’s re-exported from `@zocket/client` for convenience. Options include headers, debug logging, and lifecycle callbacks (and some reserved reconnection options).
+Factory that builds a type-safe client. It’s re-exported from `@zocket/client` for convenience. Options include headers, debug logging, and lifecycle callbacks.
 
 ### `useZocket<TRouter>()`
 
@@ -144,12 +144,43 @@ Type-safe event listener hook (returned from `useZocket`).
 - `handler: (payload) => void` - Event handler (payload is fully typed and automatically inferred)
 - `deps?: React.DependencyList` - Optional dependency list to re-subscribe when dynamic values change (e.g., room IDs)
 
+> 💡 `client.on.*` subscription functions are stable (cached) as long as you create the client once and reuse it, so `useEvent(client.on.foo.bar, handler)` won’t resubscribe on every render unless your `deps` change.
+
 **Features:**
 
 - Automatically subscribes on mount
 - Automatically unsubscribes on unmount
 - Full TypeScript inference for event payloads based on router definition
 - Compile-time type safety - catches invalid event names and incorrect payload types
+
+### `useConnectionState(client)`
+
+Hook to observe the WebSocket connection state.
+
+**Returns:**
+
+- `status: "connecting" | "open" | "closed"`
+- `readyState: number` - The underlying WebSocket `readyState` (0/1/2/3)
+- `lastError: unknown | null` - The last observed WebSocket error event (if any)
+
+**Example:**
+
+```tsx
+import { useZocket, useConnectionState } from "@zocket/react";
+import type { AppRouter } from "./server";
+
+function Status() {
+  const { client } = useZocket<AppRouter>();
+  const { status, lastError } = useConnectionState(client);
+
+  return (
+    <div>
+      <div>status: {status}</div>
+      {lastError ? <pre>{String(lastError)}</pre> : null}
+    </div>
+  );
+}
+```
 
 ## Features
 

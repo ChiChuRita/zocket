@@ -65,8 +65,6 @@ describe("Valibot validator integration", () => {
   test("client can send ping and receive pong with Valibot schemas", async () => {
     const client = createZocketClient<ValibotRouter>(`ws://127.0.0.1:${port}`, {
       headers: { user: "valibot-tester" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
@@ -92,8 +90,6 @@ describe("Valibot validator integration", () => {
   test("client can use default values from Valibot schema", async () => {
     const client = createZocketClient<ValibotRouter>(`ws://127.0.0.1:${port}`, {
       headers: { user: "valibot-default-tester" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 

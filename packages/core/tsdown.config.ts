@@ -4,7 +4,6 @@ const external = [
   "bun",
   "@standard-schema/spec",
   "partysocket",
-  "reconnecting-websocket",
 ];
 
 export default defineConfig({

@@ -218,15 +218,11 @@ describe("Fluent API demonstration", () => {
   test("admin can send system-wide announcements", async () => {
     const admin = createZocketClient<FluentRouter>(`ws://127.0.0.1:${port}`, {
       headers: { userName: "Admin", userRole: "admin" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
     const user = createZocketClient<FluentRouter>(`ws://127.0.0.1:${port}`, {
       headers: { userName: "User", userRole: "user" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
@@ -267,15 +263,11 @@ describe("Fluent API demonstration", () => {
   test("clients can send private messages", async () => {
     const alice = createZocketClient<FluentRouter>(`ws://127.0.0.1:${port}`, {
       headers: { userName: "Alice", userRole: "user" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
     const bob = createZocketClient<FluentRouter>(`ws://127.0.0.1:${port}`, {
       headers: { userName: "Bob", userRole: "user" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
@@ -331,15 +323,11 @@ describe("Fluent API demonstration", () => {
   test("clients can send room messages", async () => {
     const alice = createZocketClient<FluentRouter>(`ws://127.0.0.1:${port}`, {
       headers: { userName: "Alice", userRole: "user" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
     const bob = createZocketClient<FluentRouter>(`ws://127.0.0.1:${port}`, {
       headers: { userName: "Bob", userRole: "user" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
@@ -392,15 +380,11 @@ describe("Fluent API demonstration", () => {
   test("admin can send broadcast notifications", async () => {
     const admin = createZocketClient<FluentRouter>(`ws://127.0.0.1:${port}`, {
       headers: { userName: "Admin", userRole: "admin" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
     const user = createZocketClient<FluentRouter>(`ws://127.0.0.1:${port}`, {
       headers: { userName: "User", userRole: "user" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 

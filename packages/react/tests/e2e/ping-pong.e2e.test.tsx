@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { render, screen, waitFor } from '@testing-library/react';
 import React, { useState, useEffect } from 'react';
-import { ZocketProvider, useZocket, createZocketClient } from '../../src/index';
+import { ZocketProvider, useZocket, createZocketClient, useConnectionState } from '../../src/index';
 import { createTestServer, type PingPongRouter } from './server';
 
 let testServer: ReturnType<typeof createTestServer>;
@@ -45,6 +45,7 @@ describe('E2E: React Zocket with Real WebSocket', () => {
 
     const TestComponent = () => {
       const { client, useEvent } = useZocket<PingPongRouter>();
+      const conn = useConnectionState(client);
       const [pongReceived, setPongReceived] = useState(false);
       const [receivedData, setReceivedData] = useState<any>(null);
 
@@ -67,6 +68,7 @@ describe('E2E: React Zocket with Real WebSocket', () => {
 
       return (
         <div>
+          <div data-testid="conn-status">{conn.status}</div>
           <div data-testid="status">
             {pongReceived ? 'pong-received' : 'waiting'}
           </div>
@@ -97,6 +99,7 @@ describe('E2E: React Zocket with Real WebSocket', () => {
         { timeout: 3000 }
       );
 
+      expect(screen.getByTestId('conn-status').textContent).toBe('open');
       expect(screen.getByTestId('message').textContent).toBe(testMessage);
       expect(screen.getByTestId('timestamp').textContent).toBe(
         testTimestamp.toString()

@@ -130,15 +130,11 @@ describe("Multi-client room functionality", () => {
   test("clients can join rooms and receive join notifications", async () => {
     const alice = createZocketClient<ChatRouter>(`ws://127.0.0.1:${port}`, {
       headers: { "user-name": "Alice" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
     const bob = createZocketClient<ChatRouter>(`ws://127.0.0.1:${port}`, {
       headers: { "user-name": "Bob" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
@@ -182,15 +178,11 @@ describe("Multi-client room functionality", () => {
   test("clients receive messages only in rooms they joined", async () => {
     const alice = createZocketClient<ChatRouter>(`ws://127.0.0.1:${port}`, {
       headers: { "user-name": "Alice" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
     const bob = createZocketClient<ChatRouter>(`ws://127.0.0.1:${port}`, {
       headers: { "user-name": "Bob" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
@@ -230,15 +222,11 @@ describe("Multi-client room functionality", () => {
   test("clients can leave rooms and receive leave notifications", async () => {
     const alice = createZocketClient<ChatRouter>(`ws://127.0.0.1:${port}`, {
       headers: { "user-name": "Alice" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 
     const bob = createZocketClient<ChatRouter>(`ws://127.0.0.1:${port}`, {
       headers: { "user-name": "Bob" },
-      maxReconnectionDelay: 1000,
-      minReconnectionDelay: 100,
       debug: false,
     });
 

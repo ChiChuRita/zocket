@@ -7,7 +7,7 @@ export default defineConfig({
   format: ["esm"],
   sourcemap: true,
   treeshake: true,
-  external: ["reconnecting-websocket", "@zocket/core"],
+  external: ["@zocket/core"],
   outExtensions: () => ({ js: ".js", dts: ".d.ts" }),
   hash: false,
   clean: true,

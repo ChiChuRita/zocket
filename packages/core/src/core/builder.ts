@@ -37,13 +37,13 @@ export class MessageBuilder<TCtx = BaseContext> {
 class MessageWithInput<TCtx, TInput extends StandardSchemaV1> {
   constructor(private middlewares: any[], private schema: TInput) {}
 
-  handle(
+  handle<TOutput>(
     fn: (args: {
       ctx: TCtx;
       input: StandardSchemaV1.InferOutput<TInput>;
       send: any;
-    }) => void | Promise<void>
-  ): HandlerDefinition<TCtx, TInput> {
+    }) => TOutput | Promise<TOutput>
+  ): HandlerDefinition<TCtx, TInput, TOutput> {
     return {
       _type: "handler",
       input: this.schema,

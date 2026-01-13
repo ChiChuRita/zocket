@@ -28,15 +28,15 @@ describe("Multi-client room functionality", () => {
     .router()
     .outgoing({
       rooms: {
-        onJoin: z.object({
+        joined: z.object({
           roomId: z.string(),
           userName: z.string(),
         }),
-        onLeave: z.object({
+        left: z.object({
           roomId: z.string(),
           userName: z.string(),
         }),
-        onMessage: z.object({
+        message: z.object({
           roomId: z.string(),
           userName: z.string(),
           content: z.string(),
@@ -57,7 +57,7 @@ describe("Multi-client room functionality", () => {
             ctx.rooms.join(input.roomId);
 
             send.rooms
-              .onJoin({
+              .joined({
                 roomId: input.roomId,
                 userName,
               })
@@ -73,7 +73,7 @@ describe("Multi-client room functionality", () => {
             const userName = ctx["user-name"];
 
             send.rooms
-              .onLeave({
+              .left({
                 roomId: input.roomId,
                 userName,
               })
@@ -99,7 +99,7 @@ describe("Multi-client room functionality", () => {
             }
 
             send.rooms
-              .onMessage({
+              .message({
                 roomId: input.roomId,
                 userName,
                 content: input.content,
@@ -140,7 +140,7 @@ describe("Multi-client room functionality", () => {
 
     const bobJoinPromise = new Promise<{ roomId: string; userName: string }>(
       (resolve) => {
-        alice.on.rooms.onJoin((data) => {
+        alice.on.rooms.joined((data) => {
           if (data.userName === "Bob") {
             resolve(data);
           }
@@ -153,7 +153,7 @@ describe("Multi-client room functionality", () => {
       let bobReady = false;
 
       alice.onOpen(() => {
-        alice.send.rooms.join({ roomId: "general" });
+        alice.rooms.join({ roomId: "general" });
         aliceReady = true;
         if (aliceReady && bobReady) resolve();
       });
@@ -165,7 +165,7 @@ describe("Multi-client room functionality", () => {
     });
 
     await new Promise((resolve) => setTimeout(resolve, 100));
-    bob.send.rooms.join({ roomId: "general" });
+    bob.rooms.join({ roomId: "general" });
 
     const joinData = await bobJoinPromise;
     expect(joinData.roomId).toBe("general");
@@ -187,7 +187,7 @@ describe("Multi-client room functionality", () => {
     });
 
     const messagePromise = new Promise<string>((resolve) => {
-      alice.on.rooms.onMessage((data) => {
+      alice.on.rooms.message((data) => {
         resolve(data.content);
       });
     });
@@ -197,20 +197,20 @@ describe("Multi-client room functionality", () => {
       let bobReady = false;
 
       alice.onOpen(() => {
-        alice.send.rooms.join({ roomId: "general" });
+        alice.rooms.join({ roomId: "general" });
         aliceReady = true;
         if (aliceReady && bobReady) resolve();
       });
 
       bob.onOpen(() => {
-        bob.send.rooms.join({ roomId: "general" });
+        bob.rooms.join({ roomId: "general" });
         bobReady = true;
         if (aliceReady && bobReady) resolve();
       });
     });
 
     await new Promise((resolve) => setTimeout(resolve, 100));
-    bob.send.rooms.message({ roomId: "general", content: "Hello Alice!" });
+    bob.rooms.message({ roomId: "general", content: "Hello Alice!" });
 
     const message = await messagePromise;
     expect(message).toBe("Hello Alice!");
@@ -232,7 +232,7 @@ describe("Multi-client room functionality", () => {
 
     const leavePromise = new Promise<{ roomId: string; userName: string }>(
       (resolve) => {
-        alice.on.rooms.onLeave((data) => {
+        alice.on.rooms.left((data) => {
           if (data.userName === "Bob") {
             resolve(data);
           }
@@ -245,20 +245,20 @@ describe("Multi-client room functionality", () => {
       let bobReady = false;
 
       alice.onOpen(() => {
-        alice.send.rooms.join({ roomId: "general" });
+        alice.rooms.join({ roomId: "general" });
         aliceReady = true;
         if (aliceReady && bobReady) resolve();
       });
 
       bob.onOpen(() => {
-        bob.send.rooms.join({ roomId: "general" });
+        bob.rooms.join({ roomId: "general" });
         bobReady = true;
         if (aliceReady && bobReady) resolve();
       });
     });
 
     await new Promise((resolve) => setTimeout(resolve, 100));
-    bob.send.rooms.leave({ roomId: "general" });
+    bob.rooms.leave({ roomId: "general" });
 
     const leaveData = await leavePromise;
     expect(leaveData.roomId).toBe("general");

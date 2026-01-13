@@ -104,7 +104,7 @@ client.on.chat.onMessage((data) => {
   console.log(`${data.from}: ${data.text}`);
 });
 
-client.send.chat.message({ text: "Hello!" });
+client.chat.message({ text: "Hello!" });
 ```
 
 ## Key Concepts

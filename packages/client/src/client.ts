@@ -1,17 +1,15 @@
 import type { AnyRouter } from "@zocket/core";
-import type { ClientOn, ClientSend, ZocketClient } from "./types";
+import type { ZocketClient } from "./types";
 
 type MessageCallback = (payload: unknown) => void;
 
 type Message = {
   type: string;
   payload: unknown;
+  rpcId?: string;
 };
 
-const COMMANDS = {
-  SEND: "send",
-  ON: "on",
-} as const;
+const RPC_RES_TYPE = "__rpc_res";
 
 const DEFAULT_OPTIONS = {
   debug: false,
@@ -40,6 +38,10 @@ export function createZocketClient<TRouter extends AnyRouter>(
   const openListeners = new Set<() => void>();
   const closeListeners = new Set<() => void>();
   const errorListeners = new Set<(error: unknown) => void>();
+  const pendingRpcs = new Map<
+    string,
+    { resolve: (val: any) => void; reject: (err: any) => void; timer: any }
+  >();
   let lastError: unknown | null = null;
 
   const WebSocketImpl = globalThis.WebSocket;
@@ -132,7 +134,18 @@ export function createZocketClient<TRouter extends AnyRouter>(
           return;
         }
 
-        const { type, payload } = data as Message;
+        const { type, payload, rpcId } = data as Message;
+
+        if (type === RPC_RES_TYPE && rpcId) {
+          const pending = pendingRpcs.get(rpcId);
+          if (pending) {
+            clearTimeout(pending.timer);
+            pendingRpcs.delete(rpcId);
+            pending.resolve(payload);
+          }
+          return;
+        }
+
         const listeners = eventListeners.get(type);
         listeners?.forEach((callback) => callback(payload));
       } catch (e) {
@@ -143,8 +156,8 @@ export function createZocketClient<TRouter extends AnyRouter>(
 
   attachSocket();
 
-  const sendMessage = (route: string, payload: unknown) => {
-    const message = JSON.stringify({ type: route, payload });
+  const sendMessage = (route: string, payload: unknown, rpcId?: string) => {
+    const message = JSON.stringify({ type: route, payload, rpcId });
 
     if (!socket) {
       warn(
@@ -180,33 +193,43 @@ export function createZocketClient<TRouter extends AnyRouter>(
    */
   const proxyCache = new Map<string, any>();
 
-  const createProxy = (path: string[]): any => {
-    const key = path.join(".");
+  const createProxy = (path: string[], isListener: boolean): any => {
+    const mode = isListener ? "on" : "call";
+    const key = `${mode}.${path.join(".")}`;
     const cached = proxyCache.get(key);
     if (cached) return cached;
 
     const proxy = new Proxy(() => {}, {
       get: (target, prop: string | symbol, receiver) => {
-        // Avoid "thenable" behavior (can confuse Promise/await utilities)
         if (prop === "then") return undefined;
         if (typeof prop !== "string") {
           return Reflect.get(target, prop, receiver);
         }
-        return createProxy([...path, prop]);
+
+        return createProxy([...path, prop], isListener);
       },
       apply: (_target, _thisArg, args) => {
         const [arg0] = args;
-        const [command, ...routeParts] = path;
-        const route = routeParts.join(".");
+        const route = path.join(".");
 
-        if (command === COMMANDS.SEND) {
-          sendMessage(route, arg0);
-          return;
-        }
-
-        if (command === COMMANDS.ON) {
+        if (isListener) {
           return subscribeToEvent(route, arg0);
         }
+
+        // RPC / Unified API
+        const rpcId = Math.random().toString(36).substring(2, 15);
+
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            if (pendingRpcs.has(rpcId)) {
+              pendingRpcs.delete(rpcId);
+              reject(new Error(`RPC timeout for route: ${route}`));
+            }
+          }, 10000); // 10s default timeout
+
+          pendingRpcs.set(rpcId, { resolve, reject, timer });
+          sendMessage(route, arg0, rpcId);
+        });
       },
     });
 
@@ -214,9 +237,11 @@ export function createZocketClient<TRouter extends AnyRouter>(
     return proxy;
   };
 
-  return {
-    send: createProxy([COMMANDS.SEND]) as ClientSend<TRouter>,
-    on: createProxy([COMMANDS.ON]) as ClientOn<TRouter>,
+  const callProxy = createProxy([], false);
+  const onProxy = createProxy([], true);
+
+  const baseClient = {
+    on: onProxy,
     onOpen: (callback: () => void) => {
       openListeners.add(callback);
       return () => openListeners.delete(callback);
@@ -274,4 +299,16 @@ export function createZocketClient<TRouter extends AnyRouter>(
       return lastError;
     },
   };
+
+  return new Proxy(baseClient, {
+    get: (target, prop: string | symbol, receiver) => {
+      if (prop in target) {
+        return Reflect.get(target, prop, receiver);
+      }
+      if (typeof prop === "string") {
+        return callProxy[prop];
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  }) as any as ZocketClient<TRouter>;
 }

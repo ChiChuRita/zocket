@@ -239,7 +239,7 @@ function createMessageHandler<TUserContext>(
         return;
       }
 
-      const { type, payload } = data;
+      const { type, payload, rpcId } = data;
       const handler = handlerMap.get(type);
       const meta = metaMap.get(type);
 
@@ -303,7 +303,17 @@ function createMessageHandler<TUserContext>(
 
         // Wrap execution in AsyncLocalStorage
         await requestContext.run(finalCtx, async () => {
-          await handler({ payload: parsedPayload, ctx: finalCtx });
+          const result = await handler({ payload: parsedPayload, ctx: finalCtx });
+
+          if (rpcId) {
+            ws.send(
+              JSON.stringify({
+                type: "__rpc_res",
+                payload: result,
+                rpcId,
+              })
+            );
+          }
         });
       } else if (!handler) {
         console.warn(`SERVER: No handler found for message type: "${type}"`);

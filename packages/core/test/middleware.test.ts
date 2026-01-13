@@ -33,11 +33,11 @@ describe("Middleware", () => {
     .router()
     .outgoing({
       test: {
-        onResult: z.object({
+        result: z.object({
           step1: z.string(),
           step2: z.string(),
         }),
-        onAdmin: z.object({
+        admin: z.object({
           ok: z.literal(true),
         }),
       },
@@ -52,14 +52,14 @@ describe("Middleware", () => {
           )
           .handle(({ ctx }) => {
             send.test
-              .onResult({ step1: ctx.step1, step2: ctx.step2 })
+              .result({ step1: ctx.step1, step2: ctx.step2 })
               .to([ctx.clientId]);
           }),
 
         adminOnly: adminOnly.input(z.object({})).handle(({ ctx }) => {
           // If middleware ran, ctx.isAdmin is available here
           if (!ctx.isAdmin) return;
-          send.test.onAdmin({ ok: true }).to([ctx.clientId]);
+          send.test.admin({ ok: true }).to([ctx.clientId]);
         }),
       },
     }));
@@ -92,14 +92,14 @@ describe("Middleware", () => {
 
     const resultPromise = new Promise<{ step1: string; step2: string }>(
       (resolve) => {
-        client.on.test.onResult((data) => resolve(data));
+        client.on.test.result((data) => resolve(data));
       }
     );
 
     await new Promise<void>((resolve) => {
       client.onOpen(() => {
         // send no message to ensure schema defaults are applied before middleware runs
-        client.send.test.compute({});
+        client.test.compute({});
         resolve();
       });
     });
@@ -121,12 +121,12 @@ describe("Middleware", () => {
     );
 
     const userAdminMsg = new Promise<unknown>((resolve) => {
-      user.on.test.onAdmin((data) => resolve(data));
+      user.on.test.admin((data) => resolve(data));
     });
 
     await new Promise<void>((resolve) => {
       user.onOpen(() => {
-        user.send.test.adminOnly({});
+        user.test.adminOnly({});
         resolve();
       });
     });
@@ -147,12 +147,12 @@ describe("Middleware", () => {
     );
 
     const adminAdminMsg = new Promise<{ ok: true }>((resolve) => {
-      admin.on.test.onAdmin((data) => resolve(data));
+      admin.on.test.admin((data) => resolve(data));
     });
 
     await new Promise<void>((resolve) => {
       admin.onOpen(() => {
-        admin.send.test.adminOnly({});
+        admin.test.adminOnly({});
         resolve();
       });
     });

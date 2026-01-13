@@ -133,7 +133,7 @@ function ChatComponent() {
           {msg.from}: {msg.text}
         </div>
       ))}
-      <button onClick={() => client.send.chat.message({ text: "Hello!" })}>
+      <button onClick={() => client.chat.message({ text: "Hello!" })}>
         Send
       </button>
     </div>

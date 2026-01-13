@@ -25,7 +25,7 @@ describe("Valibot validator integration", () => {
     .router()
     .outgoing({
       echo: {
-        onPong: v.object({
+        pong: v.object({
           reply: v.string(),
         }),
       },
@@ -40,7 +40,7 @@ describe("Valibot validator integration", () => {
           )
           .handle(({ ctx, input }) => {
             const reply = `pong: ${input.message}`;
-            send.echo.onPong({ reply }).to([ctx.clientId]);
+            send.echo.pong({ reply }).to([ctx.clientId]);
           }),
       },
     }));
@@ -69,14 +69,14 @@ describe("Valibot validator integration", () => {
     });
 
     const pongPromise = new Promise<string>((resolve) => {
-      client.on.echo.onPong((data) => {
+      client.on.echo.pong((data) => {
         resolve(data.reply);
       });
     });
 
     await new Promise<void>((resolve) => {
       client.onOpen(() => {
-        client.send.echo.ping({ message: "hello from valibot" });
+        client.echo.ping({ message: "hello from valibot" });
         resolve();
       });
     });
@@ -94,14 +94,14 @@ describe("Valibot validator integration", () => {
     });
 
     const pongPromise = new Promise<string>((resolve) => {
-      client.on.echo.onPong((data) => {
+      client.on.echo.pong((data) => {
         resolve(data.reply);
       });
     });
 
     await new Promise<void>((resolve) => {
       client.onOpen(() => {
-        client.send.echo.ping({});
+        client.echo.ping({});
         resolve();
       });
     });

@@ -94,7 +94,7 @@ function ChatComponent() {
   });
 
   const sendMessage = () => {
-    client.send.posts.create({ title: "Hello!" });
+    client.posts.create({ title: "Hello!" });
   };
 
   return (
@@ -144,7 +144,7 @@ Type-safe event listener hook (returned from `useZocket`).
 - `handler: (payload) => void` - Event handler (payload is fully typed and automatically inferred)
 - `deps?: React.DependencyList` - Optional dependency list to re-subscribe when dynamic values change (e.g., room IDs)
 
-> 💡 `client.on.*` subscription functions are stable (cached) as long as you create the client once and reuse it, so `useEvent(client.on.foo.bar, handler)` won’t resubscribe on every render unless your `deps` change.
+> 💡 Subscription functions (e.g. `client.on.foo.bar`) are stable (cached) as long as you create the client once and reuse it, so `useEvent(client.on.foo.bar, handler)` won’t resubscribe on every render unless your `deps` change.
 
 **Features:**
 

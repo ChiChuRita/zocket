@@ -26,7 +26,7 @@ describe("Simple ping-pong example", () => {
     .router()
     .outgoing({
       echo: {
-        onPong: z.object({ reply: z.string() }),
+        pong: z.object({ reply: z.string() }),
       },
     })
     .incoming(({ send }) => ({
@@ -35,7 +35,7 @@ describe("Simple ping-pong example", () => {
           .input(z.object({ message: z.string().default("ping") }))
           .handle(({ ctx, input }) => {
             const reply = `pong: ${input.message}`;
-            send.echo.onPong({ reply }).to([ctx.clientId]);
+            send.echo.pong({ reply }).to([ctx.clientId]);
           }),
       },
     }));
@@ -64,17 +64,17 @@ describe("Simple ping-pong example", () => {
     });
 
     const pongPromise = new Promise<string>((resolve) => {
-      client.on.echo.onPong((data) => {
+      client.on.echo.pong((data) => {
         resolve(data.reply);
       });
     });
 
     await new Promise<void>((resolve) => {
       client.onOpen(() => {
-        client.send.echo.ping({ message: "ping" });
+        client.echo.ping({ message: "ping" });
         resolve();
 
-        client.send.echo.ping({ message: "ping" });
+        client.echo.ping({ message: "ping" });
       });
     });
 
@@ -91,14 +91,14 @@ describe("Simple ping-pong example", () => {
     });
 
     const pongPromise = new Promise<string>((resolve) => {
-      client.on.echo.onPong((data) => {
+      client.on.echo.pong((data) => {
         resolve(data.reply);
       });
     });
 
     await new Promise<void>((resolve) => {
       client.onOpen(() => {
-        handlers.send.echo.onPong({ reply: "server-push" }).broadcast();
+        handlers.send.echo.pong({ reply: "server-push" }).broadcast();
         resolve();
       });
     });
@@ -116,14 +116,14 @@ describe("Simple ping-pong example", () => {
     });
 
     const pongPromise = new Promise<string>((resolve) => {
-      client.on.echo.onPong((data) => {
+      client.on.echo.pong((data) => {
         resolve(data.reply);
       });
     });
 
     await new Promise<void>((resolve) => {
       client.onOpen(() => {
-        client.send.echo.ping({ message: "hello" });
+        client.echo.ping({ message: "hello" });
         resolve();
       });
     });

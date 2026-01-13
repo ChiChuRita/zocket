@@ -36,19 +36,19 @@ describe("Fluent API demonstration", () => {
     .router()
     .outgoing({
       system: {
-        onAnnouncement: z.object({
+        announcement: z.object({
           message: z.string(),
           from: z.string(),
           timestamp: z.date(),
         }),
       },
       chat: {
-        onPrivate: z.object({
+        private: z.object({
           from: z.string(),
           message: z.string(),
           timestamp: z.date(),
         }),
-        onRoom: z.object({
+        room: z.object({
           roomId: z.string(),
           from: z.string(),
           message: z.string(),
@@ -56,14 +56,14 @@ describe("Fluent API demonstration", () => {
         }),
       },
       notification: {
-        onReceive: z.object({
+        receive: z.object({
           type: z.enum(["info", "warning", "error"]),
           message: z.string(),
           timestamp: z.date(),
         }),
       },
       connection: {
-        onClientId: z.object({
+        clientId: z.object({
           clientId: z.string(),
         }),
       },
@@ -79,7 +79,7 @@ describe("Fluent API demonstration", () => {
             );
 
             send.system
-              .onAnnouncement({
+              .announcement({
                 message: input.message,
                 from: userName,
                 timestamp: new Date(),
@@ -103,7 +103,7 @@ describe("Fluent API demonstration", () => {
             );
 
             send.chat
-              .onPrivate({
+              .private({
                 from: userName,
                 message: input.message,
                 timestamp: new Date(),
@@ -125,7 +125,7 @@ describe("Fluent API demonstration", () => {
             );
 
             send.chat
-              .onRoom({
+              .room({
                 roomId: input.roomId,
                 from: userName,
                 message: input.message,
@@ -168,11 +168,11 @@ describe("Fluent API demonstration", () => {
             };
 
             if (input.broadcast) {
-              send.notification.onReceive(notification).broadcast();
+              send.notification.receive(notification).broadcast();
             } else if (input.targets?.length) {
-              send.notification.onReceive(notification).to(input.targets);
+              send.notification.receive(notification).to(input.targets);
             } else if (input.rooms?.length) {
-              send.notification.onReceive(notification).toRoom(input.rooms);
+              send.notification.receive(notification).toRoom(input.rooms);
             }
           }),
       },
@@ -180,7 +180,7 @@ describe("Fluent API demonstration", () => {
       connection: {
         getClientId: zo.message.input(z.object({})).handle(({ ctx }) => {
           send.connection
-            .onClientId({ clientId: ctx.clientId })
+            .clientId({ clientId: ctx.clientId })
             .to([ctx.clientId]);
         }),
       },
@@ -227,7 +227,7 @@ describe("Fluent API demonstration", () => {
     });
 
     const announcementPromise = new Promise<string>((resolve) => {
-      user.on.system.onAnnouncement((data) => {
+      user.on.system.announcement((data) => {
         console.log(
           `📥 [User Client] Received announcement: "${data.message}"`
         );
@@ -251,7 +251,7 @@ describe("Fluent API demonstration", () => {
     });
 
     await new Promise((resolve) => setTimeout(resolve, 100));
-    admin.send.system.announcement({ message: "Welcome everyone!" });
+    admin.system.announcement({ message: "Welcome everyone!" });
 
     const message = await announcementPromise;
     expect(message).toBe("Welcome everyone!");
@@ -272,7 +272,7 @@ describe("Fluent API demonstration", () => {
     });
 
     const bobClientIdPromise = new Promise<string>((resolve) => {
-      bob.on.connection.onClientId((data) => {
+      bob.on.connection.clientId((data) => {
         resolve(data.clientId);
       });
     });
@@ -281,7 +281,7 @@ describe("Fluent API demonstration", () => {
       from: string;
       message: string;
     }>((resolve) => {
-      bob.on.chat.onPrivate((data) => {
+      bob.on.chat.private((data) => {
         console.log(
           `📥 [Bob Client] Received private message from ${data.from}: "${data.message}"`
         );
@@ -299,7 +299,7 @@ describe("Fluent API demonstration", () => {
       });
 
       bob.onOpen(() => {
-        bob.send.connection.getClientId({});
+        bob.connection.getClientId({});
         bobReady = true;
         if (aliceReady && bobReady) resolve();
       });
@@ -307,7 +307,7 @@ describe("Fluent API demonstration", () => {
 
     const bobClientId = await bobClientIdPromise;
     await new Promise((resolve) => setTimeout(resolve, 100));
-    alice.send.chat.private({
+    alice.chat.private({
       targetUserId: bobClientId,
       message: "Hello Bob!",
     });
@@ -336,7 +336,7 @@ describe("Fluent API demonstration", () => {
       from: string;
       message: string;
     }>((resolve) => {
-      bob.on.chat.onRoom((data) => {
+      bob.on.chat.room((data) => {
         console.log(
           `📥 [Bob Client] Received room message from ${data.from} in ${data.roomId}: "${data.message}"`
         );
@@ -353,20 +353,20 @@ describe("Fluent API demonstration", () => {
       let bobReady = false;
 
       alice.onOpen(() => {
-        alice.send.rooms.join({ roomId: "general" });
+        alice.rooms.join({ roomId: "general" });
         aliceReady = true;
         if (aliceReady && bobReady) resolve();
       });
 
       bob.onOpen(() => {
-        bob.send.rooms.join({ roomId: "general" });
+        bob.rooms.join({ roomId: "general" });
         bobReady = true;
         if (aliceReady && bobReady) resolve();
       });
     });
 
     await new Promise((resolve) => setTimeout(resolve, 100));
-    alice.send.chat.room({ roomId: "general", message: "Hello room!" });
+    alice.chat.room({ roomId: "general", message: "Hello room!" });
 
     const result = await roomMessagePromise;
     expect(result.roomId).toBe("general");
@@ -392,7 +392,7 @@ describe("Fluent API demonstration", () => {
       type: string;
       message: string;
     }>((resolve) => {
-      user.on.notification.onReceive((data) => {
+      user.on.notification.receive((data) => {
         console.log(
           `📥 [User Client] Received notification: "${data.message}"`
         );
@@ -416,7 +416,7 @@ describe("Fluent API demonstration", () => {
     });
 
     await new Promise((resolve) => setTimeout(resolve, 100));
-    admin.send.notification.send({
+    admin.notification.send({
       type: "info",
       message: "System maintenance scheduled",
       broadcast: true,

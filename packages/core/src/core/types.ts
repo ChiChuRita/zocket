@@ -30,11 +30,12 @@ export type BaseContext = {
   rooms: RoomOperations;
 };
 
-export type IncomingMessage<TDef extends MessageDef, TCtxExt = {}> = TDef & {
+export type IncomingMessage<TDef extends MessageDef, TCtxExt = {}, TOutput = any> = TDef & {
   _direction: "in";
   _middlewares?: ReadonlyArray<MiddlewareFn<any, any, any>>;
   _ctx?: TCtxExt;
-  handler?: (args: any) => void | Promise<void>;
+  _output?: TOutput;
+  handler?: (args: any) => TOutput | Promise<TOutput>;
 };
 
 export type OutgoingMessage<TDef extends MessageDef> = TDef & {
@@ -55,7 +56,7 @@ export type TypedSender<TOutgoing extends OutgoingDefinitions> = {
     : never;
 };
 
-export type HandlerDefinition<TCtx, TInput extends StandardSchemaV1> = {
+export type HandlerDefinition<TCtx, TInput extends StandardSchemaV1, TOutput = any> = {
   _type: "handler";
   input: TInput;
   middlewares: MiddlewareFn<any, any, any>[];
@@ -63,7 +64,7 @@ export type HandlerDefinition<TCtx, TInput extends StandardSchemaV1> = {
     ctx: TCtx;
     input: StandardSchemaV1.InferOutput<TInput>;
     send: any;
-  }) => void | Promise<void>;
+  }) => TOutput | Promise<TOutput>;
 };
 
 // --- Type Helpers for Router Inference ---
@@ -77,8 +78,8 @@ export type ToOutgoingRouter<T extends OutgoingDefinitions> = {
 };
 
 export type ToIncomingRouter<T> = {
-  [K in keyof T]: T[K] extends HandlerDefinition<any, infer TInput>
-    ? IncomingMessage<{ payload: TInput }>
+  [K in keyof T]: T[K] extends HandlerDefinition<any, infer TInput, infer TOutput>
+    ? IncomingMessage<{ payload: TInput }, {}, TOutput>
     : ToIncomingRouter<T[K]>;
 };
 

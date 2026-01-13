@@ -57,7 +57,7 @@ describe('E2E: React Zocket with Real WebSocket', () => {
 
       useEffect(() => {
         const timer = setTimeout(() => {
-          client.send.test.ping({
+          client.test.ping({
             message: testMessage,
             timestamp: testTimestamp,
           });
@@ -130,7 +130,7 @@ describe('E2E: React Zocket with Real WebSocket', () => {
 
       useEffect(() => {
         const timer = setTimeout(() => {
-          client.send.test.ping({
+          client.test.ping({
             message: 'client1',
             timestamp: Date.now(),
           });
@@ -152,7 +152,7 @@ describe('E2E: React Zocket with Real WebSocket', () => {
 
       useEffect(() => {
         const timer = setTimeout(() => {
-          client.send.test.ping({
+          client.test.ping({
             message: 'client2',
             timestamp: Date.now(),
           });

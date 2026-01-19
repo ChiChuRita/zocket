@@ -1,11 +1,31 @@
+// ============================================================================
+// Primary API - Factory Pattern
+// ============================================================================
+
+export { createZocketReact } from "./factory";
+export type { ZocketReactHooks } from "./factory";
+
+// ============================================================================
+// Re-export client utilities
+// ============================================================================
+
 export { createZocketClient } from "@zocket/client";
 export type { ZocketClient } from "@zocket/client";
 
-export { ZocketProvider } from "./provider";
-export type { ZocketProviderProps } from "./provider";
+// ============================================================================
+// Hooks & Types
+// ============================================================================
 
-export { useZocket, useEvent, useConnectionState } from "./hooks";
-export type { ConnectionState, ConnectionStatus } from "./hooks";
+export {
+  useEvent,
+  useConnectionState,
+  useCall,
+  useMutation,
+} from "./hooks";
 
-export { ZocketContext } from "./context";
-export type { ZocketContextValue } from "./context";
+export type {
+  ConnectionState,
+  ConnectionStatus,
+  CallState,
+  MutationState,
+} from "./hooks";

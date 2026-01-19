@@ -10,6 +10,7 @@ type Message = {
 };
 
 const RPC_RES_TYPE = "__rpc_res";
+const ZOCKET_VERSION = "0.1.0";
 
 const DEFAULT_OPTIONS = {
   debug: false,
@@ -59,6 +60,7 @@ export function createZocketClient<TRouter extends AnyRouter>(
   const error = (...args: unknown[]) => console.error("CLIENT:", ...args);
 
   const wsUrl = new URL(url);
+  wsUrl.searchParams.set("x-zocket-version", ZOCKET_VERSION);
   if (options?.headers) {
     Object.entries(options.headers).forEach(([key, value]) => {
       wsUrl.searchParams.set(key, value);

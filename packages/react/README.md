@@ -10,98 +10,68 @@ bun add @zocket/react @zocket/client @zocket/core zod
 
 ## Quick Start
 
-### 1. Define your router (server-side)
+### 1. Initialize Zocket React (Factory Pattern)
 
-```typescript
-import { z } from "zod";
-import { zocket } from "@zocket/core";
-
-const zo = zocket.create({
-  headers: z.object({
-    user: z.string().default("guest"),
-  }),
-  onConnect: (headers) => ({ user: headers.user }),
-});
-
-export const appRouter = zo
-  .router()
-  .outgoing({
-    posts: {
-      created: z.object({
-        id: z.string(),
-        title: z.string(),
-      }),
-    },
-    users: {
-      joined: z.object({ name: z.string() }),
-    },
-  })
-  .incoming(({ send }) => ({
-    posts: {
-      create: zo.message
-        .input(z.object({ title: z.string() }))
-        .handle(({ input }) => {
-          send.posts
-            .created({
-              id: `${Date.now()}`,
-              title: input.title,
-            })
-            .broadcast();
-        }),
-    },
-  }));
-
-export type AppRouter = typeof appRouter;
-```
-
-### 2. Create a client and wrap your app
+Create a file to define your typed hooks. This pattern ensures you don't have to pass generics everywhere.
 
 ```tsx
-import { ZocketProvider, createZocketClient } from "@zocket/react";
-import type { AppRouter } from "./server";
+// src/utils/zocket.ts
+import { createZocketReact } from "@zocket/react";
+import type { AppRouter } from "./server"; // Import your router type
 
-const zocketClient = createZocketClient<AppRouter>("ws://localhost:3000", {
-  headers: { user: "alice" },
-  onOpen: () => console.log("Connected!"),
-  onClose: () => console.log("Disconnected"),
-});
+export const zocket = createZocketReact<AppRouter>();
+```
+
+### 2. Wrap your app with the Provider
+
+```tsx
+// src/App.tsx
+import { createZocketClient } from "@zocket/client";
+import { zocket } from "./utils/zocket";
+
+const client = createZocketClient("ws://localhost:3000");
 
 function App() {
   return (
-    <ZocketProvider<AppRouter> client={zocketClient}>
+    <zocket.ZocketProvider client={client}>
       <YourApp />
-    </ZocketProvider>
+    </zocket.ZocketProvider>
   );
 }
 ```
 
-### 3. Use type-safe hooks in any component
+### 3. Use type-safe hooks
 
 ```tsx
-import { useZocket } from "@zocket/react";
-import type { AppRouter } from "./server";
+import { zocket } from "./utils/zocket";
 
 function ChatComponent() {
-  const { client, useEvent } = useZocket<AppRouter>();
+  const client = zocket.useClient();
+  const { status } = zocket.useConnectionState();
   const [messages, setMessages] = useState([]);
 
-  useEvent(client.on.posts.created, (data) => {
+  // Type-safe event listening
+  zocket.useEvent(client.on.chat.newMessage, (data) => {
     setMessages((prev) => [...prev, data]);
   });
 
-  useEvent(client.on.users.joined, (data) => {
-    console.log(`${data.name} joined!`);
-  });
+  // Type-safe RPC query
+  const { data: profile, loading } = zocket.useCall(
+    (c) => c.users.getProfile({ id: '1' }),
+    []
+  );
 
-  const sendMessage = () => {
-    client.posts.create({ title: "Hello!" });
-  };
+  // Type-safe RPC mutation
+  const sendMessage = zocket.useMutation(
+    (c, text: string) => c.chat.send({ text })
+  );
 
   return (
     <div>
-      <button onClick={sendMessage}>Send</button>
+      <div>Status: {status}</div>
+      <button onClick={() => sendMessage.mutate("Hello!")}>Send</button>
       {messages.map((msg) => (
-        <div key={msg.id}>{msg.title}</div>
+        <div key={msg.id}>{msg.text}</div>
       ))}
     </div>
   );
@@ -110,107 +80,34 @@ function ChatComponent() {
 
 ## API Reference
 
-### `<ZocketProvider>`
+### `createZocketReact<TRouter>()`
 
-Provider component that shares a `ZocketClient` instance with React children.
+Generates a set of typed hooks and components for a specific router.
 
-**Props:**
+Returns:
+- `ZocketProvider`: Provider component for the client.
+- `useClient()`: Access the typed client instance.
+- `useConnectionState()`: Monitor connection status.
+- `useEvent(subscribe, handler, deps?)`: Subscribe to events.
+- `useCall(caller, deps, options?)`: Handle request-response lifecycle.
+- `useMutation(mutationFn)`: Handle imperative actions.
 
-- `client: ZocketClient<TRouter>` - A pre-configured client instance (create one with `createZocketClient`)
-- `children: ReactNode` - React children
+### Standalone Hooks
 
-> 💡 This mirrors React Query’s `QueryClientProvider`: create the client once (module scope, context provider, or `useState`) and reuse it.
+You can also import standalone hooks if you prefer manual configuration:
 
-### `createZocketClient<TRouter>(url, options?)`
-
-Factory that builds a type-safe client. It’s re-exported from `@zocket/client` for convenience. Options include headers, debug logging, and lifecycle callbacks.
-
-### `useZocket<TRouter>()`
-
-Hook to access the Zocket client and event listener.
-
-**Returns:**
-
-- `client: ZocketClient<TRouter>` - The Zocket client instance for sending messages
-- `useEvent: (subscribe, handler, deps?) => void` - Hook for type-safe event listening
-
-### `useEvent(subscribeFn, handler, deps?)`
-
-Type-safe event listener hook (returned from `useZocket`).
-
-**Parameters:**
-
-- `subscribeFn: (callback) => UnsubscribeFn` - Subscription function from `client.on` (e.g., `client.on.posts.created`)
-- `handler: (payload) => void` - Event handler (payload is fully typed and automatically inferred)
-- `deps?: React.DependencyList` - Optional dependency list to re-subscribe when dynamic values change (e.g., room IDs)
-
-> 💡 Subscription functions (e.g. `client.on.foo.bar`) are stable (cached) as long as you create the client once and reuse it, so `useEvent(client.on.foo.bar, handler)` won’t resubscribe on every render unless your `deps` change.
-
-**Features:**
-
-- Automatically subscribes on mount
-- Automatically unsubscribes on unmount
-- Full TypeScript inference for event payloads based on router definition
-- Compile-time type safety - catches invalid event names and incorrect payload types
-
-### `useConnectionState(client)`
-
-Hook to observe the WebSocket connection state.
-
-**Returns:**
-
-- `status: "connecting" | "open" | "closed"`
-- `readyState: number` - The underlying WebSocket `readyState` (0/1/2/3)
-- `lastError: unknown | null` - The last observed WebSocket error event (if any)
-
-**Example:**
-
-```tsx
-import { useZocket, useConnectionState } from "@zocket/react";
-import type { AppRouter } from "./server";
-
-function Status() {
-  const { client } = useZocket<AppRouter>();
-  const { status, lastError } = useConnectionState(client);
-
-  return (
-    <div>
-      <div>status: {status}</div>
-      {lastError ? <pre>{String(lastError)}</pre> : null}
-    </div>
-  );
-}
-```
+- `useEvent(subscribe, handler, deps)`
+- `useConnectionState(client)`
+- `useCall(client, caller, deps, options)`
+- `useMutation(client, mutationFn)`
 
 ## Features
 
-- **Type Safety** - End-to-end type safety from server to client
-- **Reconnect Helpers** - Manual reconnect and connection lifecycle hooks
-- **Auto Cleanup** - Event listeners are automatically cleaned up
-- **React Idiomatic** - Follows React patterns and best practices
-- **Zero Config** - Works out of the box with sensible defaults
-
-## Development
-
-### Running Tests
-
-```bash
-bun test
-```
-
-For watch mode:
-
-```bash
-bun test:watch
-```
-
-See [TESTING.md](./TESTING.md) for detailed testing documentation.
-
-### Building
-
-```bash
-bun run build
-```
+- **End-to-End Type Safety** - Catch errors at compile time.
+- **Factory Pattern** - Clean API without repetitive generics.
+- **RPC Support** - Built-in hooks for request-response patterns (`useCall`, `useMutation`).
+- **Real-time Subscriptions** - Declarative event handling with `useEvent`.
+- **Zero Config** - Sensible defaults for production real-time apps.
 
 ## License
 

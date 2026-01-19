@@ -3,14 +3,19 @@
   "type": "module",
   "scripts": {
     "build": "bun run --workspaces build",
-    "clean": "bunx tsdown -W --clean"
+    "clean": "bunx tsdown -W --clean",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "bun run build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "@types/bun": "latest",
     "tsdown": "^0.16.1",
     "typescript": "^5.0.0"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "docs"
   ]
 }

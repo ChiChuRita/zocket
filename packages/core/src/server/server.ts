@@ -14,6 +14,9 @@ import { createBunHandlers } from "./adapters/bun";
 import { flattenRouter } from "../core/router";
 import { requestContext } from "../core/context-store"; // Import the store
 
+const GLOBAL_TOPIC = "__zocket_all__";
+const ZOCKET_VERSION = "0.1.0";
+
 function generateClientId(): string {
   return `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
@@ -23,9 +26,8 @@ function createSendProxy<TRouter extends AnyRouter>(
   clientConnections: Map<string, WebSocketAdapter>,
   serverPublishRef?: { fn?: (topic: string, message: string) => void }
 ): Sender<TRouter> {
-  const createInnerProxy = (path: string[]): any => {
+  const createInnerProxy = (route: string): any => {
     const sender = (payload: unknown) => {
-      const route = path.join(".");
       const message = JSON.stringify({ type: route, payload });
 
       return {
@@ -56,21 +58,26 @@ function createSendProxy<TRouter extends AnyRouter>(
           }
         },
         broadcast: () => {
-          clientConnections.forEach((clientWs) => {
-            try {
-              clientWs.send(message);
-            } catch (error) {
-              console.error("SERVER: Failed to broadcast message:", error);
-            }
-          });
+          if (serverPublishRef?.fn) {
+            serverPublishRef.fn(GLOBAL_TOPIC, message);
+          } else {
+            clientConnections.forEach((clientWs) => {
+              try {
+                clientWs.send(message);
+              } catch (error) {
+                console.error("SERVER: Failed to broadcast message:", error);
+              }
+            });
+          }
         },
       };
     };
     return new Proxy(sender, {
-      get: (_target, prop: string) => createInnerProxy([...path, prop]),
+      get: (_target, prop: string) =>
+        createInnerProxy(route ? `${route}.${prop}` : prop),
     });
   };
-  return createInnerProxy([]) as Sender<TRouter>;
+  return createInnerProxy("") as Sender<TRouter>;
 }
 
 type HandlerMaps = {
@@ -121,6 +128,14 @@ function createUpgradeHandler<THeadersSchema extends StandardSchemaV1>(
       headers[key] = value;
     });
 
+    // Version check
+    const clientVersion = headers["x-zocket-version"];
+    if (clientVersion && clientVersion !== ZOCKET_VERSION) {
+      console.warn(
+        `SERVER: Client version mismatch. Client: ${clientVersion}, Server: ${ZOCKET_VERSION}`
+      );
+    }
+
     try {
       const result = await zocket.headersSchema["~standard"].validate(headers);
 
@@ -170,6 +185,7 @@ function createOpenHandler<
   return async (ws: WebSocketAdapter, clientId: string, headers: any) => {
     const initPromise = (async () => {
       clientConnections.set(clientId, ws);
+      ws.subscribe(GLOBAL_TOPIC);
 
       const rooms = new Set<string>();
       clientRooms.set(clientId, rooms);

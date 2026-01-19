@@ -273,37 +273,36 @@ function createMessageHandler<TUserContext>(
           }
         }
 
-        let mergedCtxAdditions: Record<string, unknown> = {};
-        if (meta && meta.middlewares.length > 0) {
-          for (const mw of meta.middlewares) {
-            try {
-              const add = await Promise.resolve(
-                mw({
-                  ctx: { ...ctx, ...mergedCtxAdditions },
-                  payload: parsedPayload,
-                })
-              );
-              if (add && typeof add === "object") {
-                mergedCtxAdditions = { ...mergedCtxAdditions, ...add };
+        const currentCtx = { ...ctx } as ZocketContext<any, AnyRouter>;
+
+        // Wrap execution in AsyncLocalStorage so getContext() works in middlewares and handlers
+        await requestContext.run(currentCtx, async () => {
+          if (meta && meta.middlewares.length > 0) {
+            for (const mw of meta.middlewares) {
+              try {
+                const add = await Promise.resolve(
+                  mw({
+                    ctx: currentCtx,
+                    payload: parsedPayload,
+                  })
+                );
+                if (add && typeof add === "object") {
+                  Object.assign(currentCtx, add);
+                }
+              } catch (err) {
+                console.warn(
+                  `SERVER: Middleware error for message "${type}":`,
+                  err
+                );
+                return;
               }
-            } catch (err) {
-              console.warn(
-                `SERVER: Middleware error for message "${type}":`,
-                err
-              );
-              return;
             }
           }
-        }
 
-        const finalCtx = {
-          ...ctx,
-          ...mergedCtxAdditions,
-        } as ZocketContext<any, AnyRouter>;
-
-        // Wrap execution in AsyncLocalStorage
-        await requestContext.run(finalCtx, async () => {
-          const result = await handler({ payload: parsedPayload, ctx: finalCtx });
+          const result = await handler({
+            payload: parsedPayload,
+            ctx: currentCtx,
+          });
 
           if (rpcId) {
             ws.send(

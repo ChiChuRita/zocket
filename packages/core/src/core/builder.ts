@@ -32,6 +32,22 @@ export class MessageBuilder<TCtx = BaseContext> {
   input<TInput extends StandardSchemaV1>(schema: TInput) {
     return new MessageWithInput<TCtx, TInput>(this.middlewares, schema);
   }
+
+  handle<TOutput>(
+    fn: (args: {
+      ctx: TCtx;
+      input: any;
+      send: any;
+    }) => TOutput | Promise<TOutput>
+  ): HandlerDefinition<TCtx, any, TOutput> {
+    return new MessageWithInput<TCtx, any>(this.middlewares, {
+      "~standard": {
+        version: 1,
+        vendor: "zocket",
+        validate: (value: any) => ({ value }),
+      },
+    } as any).handle(fn);
+  }
 }
 
 class MessageWithInput<TCtx, TInput extends StandardSchemaV1> {

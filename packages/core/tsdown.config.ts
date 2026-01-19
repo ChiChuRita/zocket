@@ -3,7 +3,6 @@ import { defineConfig } from "tsdown";
 const external = [
   "bun",
   "@standard-schema/spec",
-  "partysocket",
 ];
 
 export default defineConfig({

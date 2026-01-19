@@ -1,6 +1,5 @@
 {
   "name": "zocket",
-  "module": "index.ts",
   "type": "module",
   "scripts": {
     "build": "bun run --workspaces build",
@@ -8,14 +7,10 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "tsdown": "^0.16.1"
-  },
-  "peerDependencies": {
+    "tsdown": "^0.16.1",
     "typescript": "^5.0.0"
   },
   "workspaces": [
-    "packages/*",
-    "packages/examples/*",
-    "www/*"
+    "packages/*"
   ]
 }

@@ -6,8 +6,6 @@ import {
   createZocketClient,
   useConnectionState,
   useEvent,
-  useCall,
-  useMutation,
 } from "../../src/index";
 import { createTestServer, type PingPongRouter } from "./server";
 
@@ -93,108 +91,6 @@ describe("E2E: createZocketReact Factory API", () => {
     expect(screen.getByTestId("timestamp").textContent).toBe(
       testTimestamp.toString()
     );
-  });
-
-  it("should work with useCall hook for RPC", async () => {
-    const TestComponent = () => {
-      const client = zocket.useClient();
-      const conn = zocket.useConnectionState();
-
-      // Only enable call when connected
-      const { data, loading, error, refetch } = zocket.useCall(
-        (c) =>
-          c.test.ping({
-            message: "useCall test",
-            timestamp: Date.now(),
-          }),
-        [],
-        { enabled: conn.status === "open" }
-      );
-
-      return (
-        <div>
-          <div data-testid="conn-status">{conn.status}</div>
-          <div data-testid="loading">{loading ? "true" : "false"}</div>
-          <div data-testid="error">{error ? error.message : "none"}</div>
-          <div data-testid="has-data">{data ? "yes" : "no"}</div>
-          <button data-testid="refetch" onClick={refetch}>
-            Refetch
-          </button>
-        </div>
-      );
-    };
-
-    const client = createZocketClient<PingPongRouter>(serverUrl);
-
-    render(
-      <zocket.ZocketProvider client={client}>
-        <TestComponent />
-      </zocket.ZocketProvider>
-    );
-
-    // Wait for connection first
-    await waitFor(
-      () => {
-        expect(screen.getByTestId("conn-status").textContent).toBe("open");
-      },
-      { timeout: 3000 }
-    );
-
-    // Now wait for RPC to complete
-    await waitFor(
-      () => {
-        expect(screen.getByTestId("loading").textContent).toBe("false");
-      },
-      { timeout: 3000 }
-    );
-
-    expect(screen.getByTestId("error").textContent).toBe("none");
-  });
-
-  it("should work with useMutation hook", async () => {
-    const TestComponent = () => {
-      const sendPing = zocket.useMutation(
-        (client, input: { message: string; timestamp: number }) =>
-          client.test.ping(input)
-      );
-
-      return (
-        <div>
-          <div data-testid="loading">{sendPing.loading ? "true" : "false"}</div>
-          <div data-testid="error">
-            {sendPing.error ? sendPing.error.message : "none"}
-          </div>
-          <button
-            data-testid="send"
-            onClick={() =>
-              sendPing.mutate({ message: "mutation test", timestamp: Date.now() })
-            }
-          >
-            Send
-          </button>
-        </div>
-      );
-    };
-
-    const client = createZocketClient<PingPongRouter>(serverUrl);
-
-    render(
-      <zocket.ZocketProvider client={client}>
-        <TestComponent />
-      </zocket.ZocketProvider>
-    );
-
-    expect(screen.getByTestId("loading").textContent).toBe("false");
-    screen.getByTestId("send").click();
-
-    await waitFor(
-      () => {
-        expect(screen.getByTestId("loading").textContent).toBe("false");
-      },
-      { timeout: 3000 }
-    );
-
-    expect(screen.getByTestId("error").textContent).toBe("none");
   });
 });
 

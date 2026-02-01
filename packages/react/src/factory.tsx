@@ -4,15 +4,11 @@ import type { ZocketClient } from "@zocket/client";
 
 import type {
   ConnectionState,
-  CallState,
-  MutationState,
 } from "./hooks";
 
 import {
   useConnectionState as useConnectionStateBase,
   useEvent as useEventBase,
-  useCall as useCallBase,
-  useMutation as useMutationBase,
 } from "./hooks";
 
 // ============================================================================
@@ -52,26 +48,6 @@ export interface ZocketReactHooks<TRouter extends AnyRouter> {
     handler: (data: T) => void,
     deps?: DependencyList
   ) => void;
-
-  /**
-   * Make an RPC call with automatic loading/error state management
-   * @param caller - Function that takes client and returns a promise
-   * @param deps - Dependency array for re-fetching
-   * @param options - Optional configuration
-   */
-  useCall: <TOutput>(
-    caller: (client: ZocketClient<TRouter>) => Promise<TOutput>,
-    deps: DependencyList,
-    options?: { enabled?: boolean }
-  ) => CallState<TOutput>;
-
-  /**
-   * Create a mutation for imperative RPC calls
-   * @param mutationFn - Function that takes client and input, returns a promise
-   */
-  useMutation: <TInput, TOutput>(
-    mutationFn: (client: ZocketClient<TRouter>, input: TInput) => Promise<TOutput>
-  ) => MutationState<TInput, TOutput>;
 }
 
 // ============================================================================
@@ -110,15 +86,6 @@ export interface ZocketReactHooks<TRouter extends AnyRouter> {
  *   zocket.useEvent(client.on.chat.message, (msg) => {
  *     console.log('New message:', msg);
  *   });
- *
- *   const { data, loading } = zocket.useCall(
- *     (c) => c.users.getProfile({ id: 1 }),
- *     [1]
- *   );
- *
- *   const sendMessage = zocket.useMutation(
- *     (c, input: { text: string }) => c.chat.send(input)
- *   );
  *
  *   return <div>...</div>;
  * }
@@ -181,28 +148,6 @@ export function createZocketReact<
   }
 
   // -------------------------------------------------------------------------
-  // useCall
-  // -------------------------------------------------------------------------
-  function useCall<TOutput>(
-    caller: (client: ZocketClient<TRouter>) => Promise<TOutput>,
-    deps: DependencyList,
-    options?: { enabled?: boolean }
-  ): CallState<TOutput> {
-    const client = useClient();
-    return useCallBase(client, caller, deps, options);
-  }
-
-  // -------------------------------------------------------------------------
-  // useMutation
-  // -------------------------------------------------------------------------
-  function useMutation<TInput, TOutput>(
-    mutationFn: (client: ZocketClient<TRouter>, input: TInput) => Promise<TOutput>
-  ): MutationState<TInput, TOutput> {
-    const client = useClient();
-    return useMutationBase(client, mutationFn);
-  }
-
-  // -------------------------------------------------------------------------
   // Return all hooks
   // -------------------------------------------------------------------------
   return {
@@ -210,7 +155,5 @@ export function createZocketReact<
     useClient,
     useConnectionState,
     useEvent,
-    useCall,
-    useMutation,
   };
 }

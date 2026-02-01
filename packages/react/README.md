@@ -55,21 +55,15 @@ function ChatComponent() {
     setMessages((prev) => [...prev, data]);
   });
 
-  // Type-safe RPC query
-  const { data: profile, loading } = zocket.useCall(
-    (c) => c.users.getProfile({ id: '1' }),
-    []
-  );
-
-  // Type-safe RPC mutation
-  const sendMessage = zocket.useMutation(
-    (c, text: string) => c.chat.send({ text })
-  );
+  // For request/response data fetching & caching, use TanStack Query (recommended).
+  // const profile = useQuery({
+  //   queryKey: ["users.getProfile", "1"],
+  //   queryFn: () => client.users.getProfile({ id: "1" }),
+  // });
 
   return (
     <div>
       <div>Status: {status}</div>
-      <button onClick={() => sendMessage.mutate("Hello!")}>Send</button>
       {messages.map((msg) => (
         <div key={msg.id}>{msg.text}</div>
       ))}
@@ -89,8 +83,6 @@ Returns:
 - `useClient()`: Access the typed client instance.
 - `useConnectionState()`: Monitor connection status.
 - `useEvent(subscribe, handler, deps?)`: Subscribe to events.
-- `useCall(caller, deps, options?)`: Handle request-response lifecycle.
-- `useMutation(mutationFn)`: Handle imperative actions.
 
 ### Standalone Hooks
 
@@ -98,15 +90,33 @@ You can also import standalone hooks if you prefer manual configuration:
 
 - `useEvent(subscribe, handler, deps)`
 - `useConnectionState(client)`
-- `useCall(client, caller, deps, options)`
-- `useMutation(client, mutationFn)`
+
+## Data Fetching (TanStack Query)
+
+Zocket is optimized for real-time subscriptions. For request/response data fetching, caching, retries, and invalidation, use `@tanstack/react-query` with the typed Zocket client:
+
+```tsx
+import { useQuery } from "@tanstack/react-query";
+import { zocket } from "./utils/zocket";
+
+function Profile({ id }: { id: string }) {
+  const client = zocket.useClient();
+
+  const profile = useQuery({
+    queryKey: ["users.getProfile", id],
+    queryFn: () => client.users.getProfile({ id }),
+  });
+
+  return <pre>{JSON.stringify(profile.data, null, 2)}</pre>;
+}
+```
 
 ## Features
 
 - **End-to-End Type Safety** - Catch errors at compile time.
 - **Factory Pattern** - Clean API without repetitive generics.
-- **RPC Support** - Built-in hooks for request-response patterns (`useCall`, `useMutation`).
 - **Real-time Subscriptions** - Declarative event handling with `useEvent`.
+- **TanStack Query Friendly** - Use the typed client with `@tanstack/react-query`.
 - **Zero Config** - Sensible defaults for production real-time apps.
 
 ## License

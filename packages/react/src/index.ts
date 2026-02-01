@@ -21,13 +21,9 @@ export type { ZocketClient } from "@zocket/client";
 export {
   useEvent,
   useConnectionState,
-  useCall,
-  useMutation,
 } from "./hooks";
 
 export type {
   ConnectionState,
   ConnectionStatus,
-  CallState,
-  MutationState,
 } from "./hooks";

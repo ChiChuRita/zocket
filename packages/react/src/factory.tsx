@@ -1,16 +1,19 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useCallback,
-  type ReactNode,
-  type DependencyList,
-} from "react";
+import React, { createContext, useContext, type DependencyList, type ReactNode } from "react";
 import type { AnyRouter } from "@zocket/core";
 import type { ZocketClient } from "@zocket/client";
+
+import type {
+  ConnectionState,
+  CallState,
+  MutationState,
+} from "./hooks";
+
+import {
+  useConnectionState as useConnectionStateBase,
+  useEvent as useEventBase,
+  useCall as useCallBase,
+  useMutation as useMutationBase,
+} from "./hooks";
 
 // ============================================================================
 // Types
@@ -18,13 +21,6 @@ import type { ZocketClient } from "@zocket/client";
 
 type UnsubscribeFn = () => void;
 type SubscribeFn<T> = (callback: (data: T) => void) => UnsubscribeFn;
-
-import type {
-  ConnectionState,
-  ConnectionStatus,
-  CallState,
-  MutationState,
-} from "./hooks";
 
 export interface ZocketReactHooks<TRouter extends AnyRouter> {
   /**
@@ -76,16 +72,6 @@ export interface ZocketReactHooks<TRouter extends AnyRouter> {
   useMutation: <TInput, TOutput>(
     mutationFn: (client: ZocketClient<TRouter>, input: TInput) => Promise<TOutput>
   ) => MutationState<TInput, TOutput>;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function getConnectionStatus(readyState: number): ConnectionStatus {
-  if (readyState === 0) return "connecting";
-  if (readyState === 1) return "open";
-  return "closed";
 }
 
 // ============================================================================
@@ -180,41 +166,7 @@ export function createZocketReact<
   // -------------------------------------------------------------------------
   function useConnectionState(): ConnectionState {
     const client = useClient();
-
-    const [state, setState] = useState<ConnectionState>(() => {
-      const readyState = client.readyState;
-      return {
-        readyState,
-        status: getConnectionStatus(readyState),
-        lastError: client.lastError,
-      };
-    });
-
-    useEffect(() => {
-      const update = () => {
-        const readyState = client.readyState;
-        setState({
-          readyState,
-          status: getConnectionStatus(readyState),
-          lastError: client.lastError,
-        });
-      };
-
-      const offOpen = client.onOpen(update);
-      const offClose = client.onClose(update);
-      const offError = client.onError(() => update());
-
-      // Sync state in case it changed before effects ran
-      update();
-
-      return () => {
-        offOpen();
-        offClose();
-        offError();
-      };
-    }, [client]);
-
-    return state;
+    return useConnectionStateBase(client);
   }
 
   // -------------------------------------------------------------------------
@@ -225,21 +177,7 @@ export function createZocketReact<
     handler: (data: T) => void,
     deps: DependencyList = []
   ): void {
-    const handlerRef = useRef(handler);
-
-    useLayoutEffect(() => {
-      handlerRef.current = handler;
-    });
-
-    useEffect(() => {
-      const unsubscribe = subscribe((data) => {
-        handlerRef.current(data);
-      });
-      return () => {
-        unsubscribe();
-      };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [subscribe, ...deps]);
+    return useEventBase(subscribe, handler, deps);
   }
 
   // -------------------------------------------------------------------------
@@ -251,46 +189,7 @@ export function createZocketReact<
     options?: { enabled?: boolean }
   ): CallState<TOutput> {
     const client = useClient();
-    const enabled = options?.enabled ?? true;
-
-    const [state, setState] = useState<Omit<CallState<TOutput>, "refetch">>({
-      data: null,
-      loading: enabled,
-      error: null,
-    });
-
-    const callerRef = useRef(caller);
-    useLayoutEffect(() => {
-      callerRef.current = caller;
-    });
-
-    const fetchData = useCallback(async () => {
-      setState((prev) => ({ ...prev, loading: true, error: null }));
-      try {
-        const result = await callerRef.current(client);
-        setState({ data: result, loading: false, error: null });
-      } catch (err) {
-        setState({
-          data: null,
-          loading: false,
-          error: err instanceof Error ? err : new Error(String(err)),
-        });
-      }
-    }, [client]);
-
-    useEffect(() => {
-      if (!enabled) {
-        setState({ data: null, loading: false, error: null });
-        return;
-      }
-      fetchData();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [enabled, fetchData, ...deps]);
-
-    return {
-      ...state,
-      refetch: fetchData,
-    };
+    return useCallBase(client, caller, deps, options);
   }
 
   // -------------------------------------------------------------------------
@@ -300,55 +199,7 @@ export function createZocketReact<
     mutationFn: (client: ZocketClient<TRouter>, input: TInput) => Promise<TOutput>
   ): MutationState<TInput, TOutput> {
     const client = useClient();
-
-    const [state, setState] = useState<
-      Omit<MutationState<TInput, TOutput>, "mutate" | "mutateAsync" | "reset">
-    >({
-      data: null,
-      loading: false,
-      error: null,
-    });
-
-    const mutationFnRef = useRef(mutationFn);
-    useLayoutEffect(() => {
-      mutationFnRef.current = mutationFn;
-    });
-
-    const mutateAsync = useCallback(
-      async (input: TInput): Promise<TOutput> => {
-        setState((prev) => ({ ...prev, loading: true, error: null }));
-        try {
-          const result = await mutationFnRef.current(client, input);
-          setState({ data: result, loading: false, error: null });
-          return result;
-        } catch (err) {
-          const error = err instanceof Error ? err : new Error(String(err));
-          setState({ data: null, loading: false, error });
-          throw error;
-        }
-      },
-      [client]
-    );
-
-    const mutate = useCallback(
-      (input: TInput) => {
-        mutateAsync(input).catch(() => {
-          // Error is already captured in state, swallow to avoid unhandled rejection
-        });
-      },
-      [mutateAsync]
-    );
-
-    const reset = useCallback(() => {
-      setState({ data: null, loading: false, error: null });
-    }, []);
-
-    return {
-      ...state,
-      mutate,
-      mutateAsync,
-      reset,
-    };
+    return useMutationBase(client, mutationFn);
   }
 
   // -------------------------------------------------------------------------

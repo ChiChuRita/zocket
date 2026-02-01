@@ -58,21 +58,41 @@ export type PingPongRouter = typeof appRouter;
 export function createTestServer(port: number = 3333) {
   const handlers = createBunServer(appRouter, zo);
 
-  const server = Bun.serve({
-    fetch: handlers.fetch,
-    websocket: handlers.websocket,
-    port,
-    hostname: "127.0.0.1",
-  });
+  const maxAttempts = port === 0 ? 20 : 1;
+  let attempt = 0;
+  let lastError: unknown;
+  while (attempt < maxAttempts) {
+    try {
+      const candidatePort =
+        port === 0
+          ? Math.floor(Math.random() * (60_000 - 30_000 + 1)) + 30_000
+          : port;
 
-  console.log(`🧪 Test server running on ws://localhost:${server.port}`);
+      const server = Bun.serve({
+        fetch: handlers.fetch,
+        websocket: handlers.websocket,
+        port: candidatePort,
+        hostname: "127.0.0.1",
+      });
 
-  return {
-    server,
-    url: `ws://localhost:${server.port}`,
-    close: () => {
-      server.stop();
-      console.log(`🛑 Test server stopped`);
-    },
-  };
+      console.log(`🧪 Test server running on ws://localhost:${server.port}`);
+
+      return {
+        server,
+        url: `ws://localhost:${server.port}`,
+        close: () => {
+          server.stop();
+          console.log(`🛑 Test server stopped`);
+        },
+      };
+    } catch (err) {
+      lastError = err;
+      attempt++;
+      if (port !== 0) {
+        throw err;
+      }
+    }
+  }
+
+  throw lastError ?? new Error("Failed to start test server");
 }

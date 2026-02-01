@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "test": "bun test tests/unit/",
+    "test": "bun test tests/",
     "test:watch": "bun test tests/ --watch",
     "test:e2e": "bun test tests/e2e/",
     "test:all": "bun test tests/"

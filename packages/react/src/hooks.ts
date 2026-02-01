@@ -44,6 +44,9 @@ export type MutationState<TInput, TOutput> = {
 // Helpers
 // ============================================================================
 
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
 function getConnectionStatus(readyState: number): ConnectionStatus {
   if (readyState === 0) return "connecting";
   if (readyState === 1) return "open";
@@ -68,7 +71,7 @@ export function useEvent<T>(
 ): void {
   const handlerRef = useRef(handler);
 
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     handlerRef.current = handler;
   });
 
@@ -150,17 +153,35 @@ export function useCall<TRouter extends AnyRouter, TOutput>(
     error: null,
   });
 
+  const isMountedRef = useRef(false);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const requestIdRef = useRef(0);
+
   const callerRef = useRef(caller);
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     callerRef.current = caller;
   });
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+
     setState((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const result = await callerRef.current(client);
+      if (!isMountedRef.current || requestId !== requestIdRef.current) {
+        return;
+      }
       setState({ data: result, loading: false, error: null });
     } catch (err) {
+      if (!isMountedRef.current || requestId !== requestIdRef.current) {
+        return;
+      }
       setState({
         data: null,
         loading: false,
@@ -171,6 +192,7 @@ export function useCall<TRouter extends AnyRouter, TOutput>(
 
   useEffect(() => {
     if (!enabled) {
+      requestIdRef.current++;
       setState({ data: null, loading: false, error: null });
       return;
     }
@@ -203,7 +225,7 @@ export function useMutation<TRouter extends AnyRouter, TInput, TOutput>(
   });
 
   const mutationFnRef = useRef(mutationFn);
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     mutationFnRef.current = mutationFn;
   });
 

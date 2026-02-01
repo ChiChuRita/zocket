@@ -4,7 +4,11 @@ description: Server-side setup and message handling
 icon: lucide:server
 ---
 
-To create a Zocket server, you first need a Zocket instance and a Router.
+To create a Zocket server, you create:
+
+1. A Zocket instance (`zocket.create(...)`)
+2. A router (`zo.router().outgoing(...).incoming(...)`)
+3. A server adapter (today: Bun via `createBunServer`)
 
 ## Server Initialization
 
@@ -13,14 +17,29 @@ import { zocket, createBunServer } from "@zocket/core";
 import { z } from "zod";
 
 const zo = zocket.create({
-  headers: z.object({ auth: z.string() }),
-  onConnect: (headers) => ({ userId: headers.auth }),
+  headers: z.object({ authorization: z.string().optional() }),
+  onConnect: (headers, clientId) => ({ userId: headers.authorization ?? null }),
   onDisconnect: (ctx, clientId) => {
-    console.log(`User ${ctx.userId} disconnected`);
+    console.log(`Client disconnected: ${clientId}`);
   }
 });
 
-const appRouter = zo.router().outgoing({}).incoming(() => ({}));
+const appRouter = zo
+  .router()
+  .outgoing({
+    system: {
+      announcement: z.object({ text: z.string() }),
+    },
+  })
+  .incoming(({ send }) => ({
+    system: {
+      announce: zo.message
+        .input(z.object({ text: z.string() }))
+        .handle(({ input }) => {
+          send.system.announcement({ text: input.text }).broadcast();
+        }),
+    },
+  }));
 
 // Create Bun handler
 const handlers = createBunServer(appRouter, zo);
@@ -28,6 +47,7 @@ const handlers = createBunServer(appRouter, zo);
 Bun.serve({
   fetch: handlers.fetch,
   websocket: handlers.websocket,
+  port: 3000,
 });
 ```
 
@@ -40,9 +60,11 @@ The `send` object is passed as an argument to the `.incoming()` callback.
 
 ```typescript
 .incoming(({ send }) => ({
-  echo: zo.message.input(z.string()).handle(({ input }) => {
-    send.echo({ text: input }).broadcast();
-  })
+  system: {
+    announce: zo.message.input(z.object({ text: z.string() })).handle(({ input }) => {
+      send.system.announcement({ text: input.text }).broadcast();
+    }),
+  },
 }))
 ```
 

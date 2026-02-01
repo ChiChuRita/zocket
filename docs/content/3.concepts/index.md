@@ -39,10 +39,11 @@ These are handlers for messages that the **Client sends to the Server**. You def
 
 ## Messages
 
-A **Message** definition in the incoming router specifies:
-1.  **Input Schema**: Validates the data sent by the client.
-2.  **Handler**: The function that executes when the message is received.
-3.  **Middleware**: Optional logic to run before the handler (e.g., authentication).
+A **Message** (procedure) definition in the incoming router specifies:
+
+1. **Input schema** (optional): validates data sent by the client
+2. **Middleware** (optional): augments `ctx` and/or blocks execution
+3. **Handler**: runs when the message is received
 
 ```typescript
 zo.message
@@ -82,26 +83,29 @@ In your handlers:
 ### Built-in Context
 Zocket adds some built-in properties to your context:
 - `ctx.clientId`: The unique ID of the connected client.
-- `ctx.rooms`: Methods to join (`.join()`) and leave (`.leave()`) rooms.
+- `ctx.rooms`: Room helpers (`join`, `leave`, `has`, `current`).
 
 ## Middleware
 
 Middleware allows you to wrap message handlers with common logic. You can modify the context or throw errors to block execution.
 
 ```typescript
-const protectedProcedure = zo.message.use(({ ctx }) => {
-  if (!ctx.user) {
-    throw new Error("Unauthorized");
-  }
-  return { ...ctx, user: ctx.user }; // Refine context type
-    });
+const requireUser = zo.message.use(({ ctx }) => {
+  if (!ctx.user) throw new Error("Unauthorized");
+  // Returning `user` as non-null refines the type for handlers.
+  return { user: ctx.user };
+});
 
 // Use it in your router
 .incoming(() => ({
-  secret: protectedProcedure
+  secret: requireUser
     .input(z.string())
     .handle(({ ctx }) => {
       // ctx.user is guaranteed to be present here
     })
 }))
 ```
+
+## JSON payloads
+
+Zocket’s transport is JSON. Prefer JSON-friendly types (strings, numbers, booleans, objects, arrays). For example, instead of `z.date()`, send timestamps as `z.number()` or ISO strings.

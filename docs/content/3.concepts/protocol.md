@@ -10,6 +10,7 @@ Zocket uses a simple, JSON-based protocol over standard WebSockets. This documen
 
 - **Transport**: Standard WebSockets (`ws://` or `wss://`).
 - **Serialization**: Every message is a JSON-encoded object. Binary formats are currently not supported but are on the roadmap.
+  - Tip: Prefer JSON-friendly types in your schemas. For example, send timestamps as numbers/ISO strings instead of `Date` objects.
 
 ## Connection Lifecycle
 
@@ -19,7 +20,7 @@ Because the browser's native `WebSocket` API does not support custom HTTP header
 
 1.  The client connects to the server URL (e.g., `ws://api.example.com`).
 2.  Headers defined in `zocket.create({ headers: ... })` are passed as query parameters:
-    `ws://api.example.com?authorization=Bearer+token123&version=1.0`
+    `ws://api.example.com?authorization=Bearer+token123&x-zocket-version=0.1.0`
 3.  The server maps these query parameters back into an internal headers object.
 4.  The server validates the headers against the schema before completing the WebSocket upgrade.
 
@@ -53,11 +54,13 @@ Used for fire-and-forget messaging or server-pushed updates.
 ```
 
 - `type`: (String) The dot-notated route path defined in the router.
-- `payload`: (Any) The data being sent, validated against the route's schema.
+- `payload`: (Any) The data being sent. Incoming procedure payloads are validated on the server; outgoing event payloads are type-safe by construction but not currently runtime-validated on the client.
 
 ### RPC (Request/Response)
 
 When a client expects a response from a handler, it includes an `rpcId`.
+
+Note: `@zocket/client` currently includes an `rpcId` for all procedure calls.
 
 **Request (Client → Server):**
 ```json
@@ -88,7 +91,7 @@ When a client expects a response from a handler, it includes an `rpcId`.
 For performance, Zocket uses a reserved internal topic called `__zocket_all__`.
 
 1.  Every client is automatically subscribed to `__zocket_all__` on connection.
-2.  When `ctx.send.path.broadcast()` is called, the server uses the native adapter's `publish` method (e.g., `Bun.publish`) to send the message to the global topic in a single operation.
+2.  When `send.<route>(...).broadcast()` is called, the server uses the native adapter's `publish` method (e.g., `Bun.publish`) to send the message to the global topic in a single operation.
 3.  This avoids a JavaScript loop over all connected clients, providing performance close to raw sockets.
 
 ### Rooms

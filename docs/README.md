@@ -1,49 +1,27 @@
-# shadcn-docs-nuxt Minimal Starter
+# Zocket Docs
 
-Starter template for [shadcn-docs-nuxt](https://github.com/ZTL-UwU/shadcn-docs-nuxt).
+This folder contains the documentation site for Zocket, built with Nuxt 3 and `shadcn-docs-nuxt`.
 
-## Setup
+## Development
 
-Make sure to install the dependencies:
+From the repo root:
 
 ```bash
-# yarn
-yarn install
-
-# npm
-npm install
-
-# pnpm
-pnpm install
-
-# bun
 bun install
+cd docs
+bun run dev
 ```
 
-## Development Server
-
-Start the development server on http://localhost:3000
+## Build / Preview
 
 ```bash
-npm run dev
+cd docs
+bun run build
+bun run preview
 ```
 
-## Production
+## Editing content
 
-[![Deploy to NuxtHub](https://hub.nuxt.com/button.svg)](https://hub.nuxt.com/new?repo=ZTL-UwU/shadcn-docs-nuxt-starter)
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FZTL-UwU%2Fshadcn-docs-nuxt-starter)
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https%3A%2F%2Fgithub.com%2FZTL-UwU%2Fshadcn-docs-nuxt-starter)
+Docs pages live in `docs/content/` and are written in Markdown (Nuxt Content). Files are prefixed with numbers to control ordering in the sidebar (e.g. `1.introduction.md`, `4.server/index.md`).
 
-Build the application for production:
-
-```bash
-npm run build
-```
-
-Locally preview production build:
-
-```bash
-npm run preview
-```
-
-Checkout the [deployment documentation](https://shadcn-docs-nuxt.vercel.app/getting-started/deployment) for more information.
+Static assets live in `docs/public/`.

@@ -9,7 +9,7 @@ The `@zocket/react` package provides a factory to generate type-safe hooks and a
 ## Installation
 
 ```bash
-bun add @zocket/react
+bun add @zocket/react @zocket/client
 ```
 
 ## Initial Setup
@@ -23,7 +23,7 @@ Create a file to initialize your React integration:
 ```tsx
 // src/utils/zocket.ts
 import { createZocketReact } from "@zocket/react";
-import type { AppRouter } from "../../../server/index"; // Import your server's router type
+import type { AppRouter } from "path-to-your-server-router-type";
 
 export const zocket = createZocketReact<AppRouter>();
 ```
@@ -63,7 +63,7 @@ function MyComponent() {
   return (
     <div>
       Connection status: {status}
-      <button onClick={() => client.chat.send({ text: "Hello!" })}>
+      <button onClick={() => client.chat.post({ text: "Hello!" })}>
         Send Message
       </button>
     </div>

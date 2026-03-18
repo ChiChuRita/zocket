@@ -1,0 +1,240 @@
+---
+title: Actors
+description: Define stateful actors with typed methods, events, and lifecycle hooks.
+---
+
+Actors are the core building block of Zocket. Each actor definition describes a **stateful unit** with a schema-validated state, typed methods, events, and lifecycle hooks.
+
+## Defining an Actor
+
+Use the `actor()` function from `@zocket/core`:
+
+```ts
+import { z } from "zod";
+import { actor } from "@zocket/core";
+
+const Counter = actor({
+  state: z.object({
+    count: z.number().default(0),
+  }),
+
+  methods: {
+    increment: {
+      handler: ({ state }) => {
+        state.count += 1;
+        return state.count;
+      },
+    },
+    add: {
+      input: z.object({ amount: z.number() }),
+      handler: ({ state, input }) => {
+        state.count += input.amount;
+        return state.count;
+      },
+    },
+  },
+});
+```
+
+The returned `ActorDef` carries full type information — callers never need to specify generics manually.
+
+## State
+
+State is defined using a Standard Schema (Zod, Valibot, etc.). The server initializes state by validating an empty object `{}` against your schema, so use `.default()` for fields:
+
+```ts
+state: z.object({
+  players: z.array(PlayerSchema).default([]),
+  phase: z.enum(["lobby", "playing"]).default("lobby"),
+  round: z.number().default(0),
+}),
+```
+
+State is managed with **Immer** on the server. Inside method handlers, you mutate a draft directly — Zocket tracks changes and broadcasts JSON patches to subscribers.
+
+## Methods
+
+Each method has an optional `input` schema and a required `handler`:
+
+```ts
+methods: {
+  // No input
+  reset: {
+    handler: ({ state }) => {
+      state.count = 0;
+    },
+  },
+
+  // With validated input
+  setName: {
+    input: z.object({ name: z.string().min(1) }),
+    handler: ({ state, input }) => {
+      state.name = input.name;
+    },
+  },
+},
+```
+
+### MethodContext
+
+Every handler receives a context object:
+
+| Property       | Type                  | Description                                    |
+| :------------- | :-------------------- | :--------------------------------------------- |
+| `state`        | `TState` (Immer draft)| Mutable state — changes are tracked as patches  |
+| `input`        | `InferSchema<TInput>` | Validated input (or `undefined` if no schema)   |
+| `emit`         | `TypedEmitFn`         | Emit typed events to subscribers                |
+| `connectionId` | `string`              | Opaque ID for the calling connection            |
+| `ctx`          | `TCtx`                | Middleware context (see [Middleware](/core/middleware/)) |
+
+### Return Values
+
+Methods can return values. The client receives the return value as a resolved promise:
+
+```ts
+// Server
+handler: ({ state }) => {
+  return { count: state.count };
+},
+
+// Client
+const result = await counter.increment(); // { count: 1 }
+```
+
+### Sequential Execution
+
+All method calls on a single actor instance are **queued and executed sequentially** — one at a time. This gives you single-writer semantics without locks.
+
+## Events
+
+Events are typed messages broadcast to all connections subscribed to an actor instance:
+
+```ts
+const ChatRoom = actor({
+  state: z.object({
+    messages: z.array(MessageSchema).default([]),
+  }),
+
+  methods: {
+    send: {
+      input: z.object({ text: z.string() }),
+      handler: ({ state, input, emit, connectionId }) => {
+        const msg = { text: input.text, from: connectionId };
+        state.messages.push(msg);
+        emit("newMessage", msg);
+      },
+    },
+  },
+
+  events: {
+    newMessage: z.object({ text: z.string(), from: z.string() }),
+  },
+});
+```
+
+Event payloads are validated at runtime against their schemas before being broadcast.
+
+## Lifecycle Hooks
+
+Actors support `onConnect` and `onDisconnect` hooks. These fire when a connection first interacts with an actor instance and when it disconnects:
+
+```ts
+const Room = actor({
+  state: z.object({
+    online: z.array(z.string()).default([]),
+  }),
+
+  methods: { /* ... */ },
+
+  onConnect({ state, connectionId }) {
+    state.online.push(connectionId);
+  },
+
+  onDisconnect({ state, connectionId }) {
+    const idx = state.online.indexOf(connectionId);
+    if (idx !== -1) state.online.splice(idx, 1);
+  },
+});
+```
+
+Lifecycle hooks receive a `LifecycleContext` with `state` (Immer draft), `connectionId`, and `emit`. They are queued alongside method calls to preserve ordering.
+
+## Full Example: Drawing Room
+
+From the `example-draw` package:
+
+```ts
+import { z } from "zod";
+import { actor, createApp } from "@zocket/core";
+
+const Stroke = z.object({
+  points: z.array(z.tuple([z.number(), z.number()])),
+  color: z.string(),
+  width: z.number(),
+});
+
+const DrawingRoom = actor({
+  state: z.object({
+    players: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      score: z.number(),
+      color: z.string(),
+      connectionId: z.string().default(""),
+    })).default([]),
+    phase: z.enum(["lobby", "drawing", "roundEnd"]).default("lobby"),
+    drawerId: z.string().default(""),
+    word: z.string().default(""),
+    hint: z.string().default(""),
+    strokes: z.array(Stroke).default([]),
+    round: z.number().default(0),
+  }),
+
+  methods: {
+    join: {
+      input: z.object({ name: z.string() }),
+      handler: ({ state, input, connectionId }) => {
+        const existing = state.players.find((p) => p.name === input.name);
+        if (existing) {
+          existing.connectionId = connectionId;
+          return { playerId: existing.id, color: existing.color };
+        }
+        const id = Math.random().toString(36).slice(2, 10);
+        const color = ["#ef4444", "#3b82f6", "#22c55e"][state.players.length % 3];
+        state.players.push({ id, name: input.name, score: 0, color, connectionId });
+        return { playerId: id, color };
+      },
+    },
+
+    draw: {
+      input: z.object({ stroke: Stroke }),
+      handler: ({ state, input }) => {
+        state.strokes.push(input.stroke);
+      },
+    },
+
+    guess: {
+      input: z.object({ playerId: z.string(), text: z.string() }),
+      handler: ({ state, input, emit }) => {
+        const correct = input.text.toLowerCase() === state.word.toLowerCase();
+        if (correct) {
+          emit("correctGuess", { name: input.playerId, word: state.word });
+          state.phase = "roundEnd";
+        }
+        return { correct };
+      },
+    },
+  },
+
+  events: {
+    correctGuess: z.object({ name: z.string(), word: z.string() }),
+  },
+
+  onDisconnect({ state, connectionId }) {
+    const idx = state.players.findIndex((p) => p.connectionId === connectionId);
+    if (idx !== -1) state.players.splice(idx, 1);
+  },
+});
+
+export const app = createApp({ actors: { draw: DrawingRoom } });
+```

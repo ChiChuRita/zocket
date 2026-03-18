@@ -1,0 +1,138 @@
+---
+title: State Management
+description: Immer mutations, JSON patches, and client-side subscriptions.
+---
+
+Zocket's state management flows from server-side Immer mutations through JSON patches to client-side subscriptions.
+
+## Server: Immer Mutations
+
+Inside method handlers and lifecycle hooks, `state` is an Immer draft. Mutate it directly:
+
+```ts
+handler: ({ state, input }) => {
+  // Direct mutations — Immer tracks all changes
+  state.messages.push(input.message);
+  state.count += 1;
+  state.players[0].score = 100;
+}
+```
+
+After the handler returns, Immer generates a list of JSON Patch operations representing the diff.
+
+## Patch Generation
+
+Zocket converts Immer patches to RFC 6902 JSON Patches:
+
+```ts
+// Immer patch: { op: "add", path: ["messages", 2], value: { text: "hi" } }
+// JSON Patch:  { op: "add", path: "/messages/2", value: { text: "hi" } }
+```
+
+Only `add`, `replace`, and `remove` operations are generated.
+
+## Broadcast
+
+If any state subscribers are connected, patches are broadcast as `state:patch` messages:
+
+```json
+{
+  "type": "state:patch",
+  "actor": "chat",
+  "actorId": "room-1",
+  "patches": [
+    { "op": "add", "path": "/messages/-", "value": { "text": "hi" } }
+  ]
+}
+```
+
+## Client: State Store
+
+Each actor handle has a `StateStore` that maintains a local copy of the state:
+
+1. **Snapshot** — received on first subscription, replaces local state entirely
+2. **Patches** — applied incrementally using `structuredClone` + patch logic
+3. **Notification** — all subscribers are called after each update
+
+```ts
+// Subscribe to state changes
+const unsub = room.state.subscribe((state) => {
+  console.log("Messages:", state.messages);
+});
+
+// Read current state
+const current = room.state.getSnapshot();
+```
+
+## React: Selectors
+
+Use `useActorState` with a selector to subscribe to specific parts of state:
+
+```tsx
+// Only re-renders when `phase` changes
+const phase = useActorState(room, (s) => s.phase);
+
+// Only re-renders when the number of players changes
+const playerCount = useActorState(room, (s) => s.players.length);
+
+// Full state (re-renders on every change)
+const state = useActorState(room);
+```
+
+The selector runs locally on every state update. The hook uses `useSyncExternalStore` for correct concurrent mode behavior.
+
+### Caching
+
+The selector result is cached — if the raw state reference hasn't changed, the previous selected value is reused. This prevents unnecessary re-renders.
+
+## Best Practices
+
+### Keep State Flat
+
+```ts
+// Good — flat, easy to patch
+state: z.object({
+  players: z.array(PlayerSchema).default([]),
+  phase: z.enum(["lobby", "playing"]).default("lobby"),
+  round: z.number().default(0),
+})
+
+// Avoid — deeply nested, harder to select efficiently
+state: z.object({
+  game: z.object({
+    round: z.object({
+      phase: z.string(),
+      players: z.array(/* ... */),
+    })
+  })
+})
+```
+
+### Use Selectors
+
+Don't subscribe to the full state when you only need one field:
+
+```tsx
+// Good — minimal re-renders
+const phase = useActorState(room, (s) => s.phase);
+
+// Avoid — re-renders on every state change
+const state = useActorState(room);
+const phase = state?.phase;
+```
+
+### Avoid New References in Selectors
+
+```tsx
+// Avoid — creates a new array every time
+const sorted = useActorState(room, (s) =>
+  [...s.players].sort((a, b) => b.score - a.score)
+);
+
+// Better — select the data, sort in useMemo
+const players = useActorState(room, (s) => s.players);
+const sorted = useMemo(
+  () => players ? [...players].sort((a, b) => b.score - a.score) : [],
+  [players]
+);
+```

@@ -1,0 +1,88 @@
+---
+title: Bun Adapter
+description: Serve your Zocket app with Bun in one line.
+---
+
+The `@zocket/server` package ships with a first-class Bun adapter.
+
+## Quick Start
+
+```ts
+import { serve } from "@zocket/server/bun";
+import { app } from "./app";
+
+const server = serve(app, { port: 3000 });
+console.log(`Zocket on ws://localhost:${server.port}`);
+```
+
+That's it. `serve()` creates a Bun HTTP server that upgrades WebSocket connections and wires up all the actor message handling.
+
+## Options
+
+```ts
+serve(app, {
+  port: 3000,      // default: 0 (random available port)
+  hostname: "0.0.0.0",
+});
+```
+
+The return value is a standard `Bun.Server` instance.
+
+## Custom Setup with `createBunHandlers`
+
+For more control (e.g., adding HTTP routes alongside WebSocket), use `createBunHandlers`:
+
+```ts
+import { createBunHandlers } from "@zocket/server/bun";
+import { app } from "./app";
+
+const zocket = createBunHandlers(app);
+
+Bun.serve({
+  port: 3000,
+
+  fetch(req, server) {
+    // Try WebSocket upgrade first
+    const wsResponse = zocket.fetch(req, server);
+    if (wsResponse === undefined) return wsResponse; // upgrade succeeded
+
+    // Custom HTTP routes
+    const url = new URL(req.url);
+    if (url.pathname === "/health") {
+      return new Response("ok");
+    }
+
+    return new Response("Not Found", { status: 404 });
+  },
+
+  websocket: zocket.websocket,
+});
+```
+
+### BunHandlers Shape
+
+```ts
+interface BunHandlers {
+  fetch(req: Request, server: BunServer): Response | undefined;
+  websocket: WebSocketHandler;
+}
+```
+
+- `fetch` — attempts to upgrade the request to WebSocket. Returns `undefined` on success, or a `Response` on failure.
+- `websocket` — Bun's `WebSocketHandler` with `open`, `message`, and `close` callbacks wired to Zocket's handler.
+
+## How It Works
+
+Under the hood:
+
+1. `createBunHandlers(app)` calls `createHandlers(app)` to get runtime-agnostic callbacks
+2. Each WebSocket connection gets a `BunConnectionAdapter` with a unique `id`
+3. The adapter implements the `Connection` interface (`send()` + `id`)
+4. Messages are routed through the handler to the `ActorManager`
+
+## Connection IDs
+
+Each connection gets a unique ID like `bun_1_m3abc`. This ID is:
+- Passed to method handlers as `connectionId`
+- Used by lifecycle hooks (`onConnect`, `onDisconnect`)
+- Stable for the lifetime of a WebSocket connection

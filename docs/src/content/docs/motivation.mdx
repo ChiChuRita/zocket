@@ -1,0 +1,98 @@
+---
+title: Motivation
+description: Why Zocket exists and the problems it solves.
+---
+
+## The Problem
+
+Building realtime apps in TypeScript today is painful. You either reach for a raw WebSocket and hand-roll everything, or use a library like Socket.io that was designed before TypeScript existed.
+
+Either way, you end up with the same problems:
+
+### No type safety across the wire
+
+With Socket.io or raw WebSockets, your server and client are connected by string event names and `any`-typed payloads. Rename an event on the server? The client silently breaks. Change a payload shape? Runtime crash in production.
+
+```ts
+// Socket.io — types are your responsibility
+socket.emit("chat:message", { text: "hello" });
+
+// Typo? Wrong shape? No one will tell you until production.
+socket.on("chat:mesage", (data) => {
+  console.log(data.txt); // undefined — no compile error
+});
+```
+
+You can bolt on shared interfaces, but they're manual, drift over time, and give you no validation at runtime.
+
+### State synchronization is DIY
+
+Every realtime app needs to keep client-side state in sync with the server. With existing tools, you're on your own:
+
+- Build your own diffing/patching logic
+- Manage subscription lifecycles manually
+- Hope that two clients don't see conflicting state
+
+### No structure for server-side logic
+
+Raw WebSockets give you a single `onmessage` callback. From there, you build your own routing, validation, and concurrency model. Socket.io gives you event names, but nothing for managing state, handling race conditions, or organizing logic into isolated units.
+
+## How Zocket Solves This
+
+### End-to-end type safety
+
+Define your schema once on the server. The client infers everything — methods, inputs, return types, events, and state shape. No codegen. No shared interface files.
+
+```ts
+// Server
+const Counter = actor({
+  state: z.object({ count: z.number().default(0) }),
+  methods: {
+    increment: {
+      handler: ({ state }) => {
+        state.count += 1;
+        return state.count;
+      },
+    },
+  },
+});
+
+// Client — fully typed, zero manual work
+const counter = client.counter("room-1");
+const result = await counter.increment(); // number
+```
+
+Change the server, and the client shows a type error instantly.
+
+### Automatic state sync
+
+Zocket uses Immer on the server to track mutations as JSON patches, then streams only the diffs to subscribed clients. Your client gets a reactive state store that stays in sync automatically:
+
+```ts
+// Server mutates state directly
+handler: ({ state }) => {
+  state.players.push({ name: "Alice", score: 0 });
+}
+
+// Client receives granular patches — not the entire state
+room.state.subscribe((state) => {
+  console.log(state.players); // always up-to-date
+});
+```
+
+No diffing logic. No manual events to keep things in sync. No stale state.
+
+### Actors give you structure
+
+Instead of a flat bag of event handlers, Zocket organizes your server logic into **actors** — isolated stateful units with sequential method execution:
+
+- **State** — schema-validated, Immer-managed, automatically synced
+- **Methods** — queued one-at-a-time per instance, no race conditions
+- **Events** — typed messages broadcast to subscribers
+- **Lifecycle hooks** — `onConnect` / `onDisconnect` per actor instance
+
+Each actor instance (e.g., a chat room, a game session) has its own state and processes calls sequentially. No locks, no mutex, no distributed state bugs.
+
+## How does Zocket compare?
+
+See the [Comparison](/comparison/) page for a detailed, balanced look at how Zocket stacks up against Socket.io, PartyKit, Convex, Liveblocks, Supabase Realtime, and others.

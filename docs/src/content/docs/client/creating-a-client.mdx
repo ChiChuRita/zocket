@@ -1,0 +1,229 @@
+---
+title: Creating a Client
+description: Connect to your Zocket server with full type safety.
+---
+
+The `@zocket/client` package provides `createClient` — a fully typed WebSocket client that infers its API from your app definition.
+
+## Basic Usage
+
+```ts
+import { createClient } from "@zocket/client";
+import type { app } from "./server";
+
+const client = createClient<typeof app>({
+  url: "ws://localhost:3000",
+});
+```
+
+The generic `<typeof app>` is the only type annotation you need. Everything else — actor names, method signatures, event payloads, state shapes — is inferred.
+
+## Options
+
+```ts
+interface ClientOptions {
+  /** WebSocket URL for the Zocket server. */
+  url: string;
+
+  /**
+   * Total timeout in ms for an RPC, including time spent waiting for a live
+   * socket before the request can be sent. 0 = no timeout. Default: 10000.
+   */
+  rpcTimeout?: number;
+
+  /** Reject `$ready` if the initial connection is not established in time. Default: 10000. */
+  connectTimeout?: number;
+
+  /** Automatically reconnect after unexpected socket closes. Default: true. */
+  reconnect?: boolean;
+
+  /** Override reconnect delay in ms. Useful for deterministic tests. */
+  reconnectDelayMs?: number;
+}
+```
+
+### RPC Timeout
+
+The `rpcTimeout` covers the **entire lifecycle** of an RPC call — from the moment you call the method to when the server responds. This includes time spent waiting for the WebSocket to be ready (e.g., during reconnection):
+
+```ts
+const client = createClient<typeof app>({
+  url: "ws://localhost:3000",
+  rpcTimeout: 5000, // 5 seconds total
+});
+```
+
+If the socket is reconnecting and takes 2 seconds to open, the RPC has 3 seconds remaining for the server to respond. If the full timeout elapses, the promise rejects:
+
+```ts
+try {
+  await room.sendMessage({ text: "hello" });
+} catch (err) {
+  // 'RPC "sendMessage" timed out after 5000ms'
+}
+```
+
+Set to `0` to disable timeouts entirely.
+
+### Connect Timeout
+
+Rejects `connection.ready` if the initial connection isn't established in time:
+
+```ts
+const client = createClient<typeof app>({
+  url: "ws://localhost:3000",
+  connectTimeout: 3000,
+});
+
+try {
+  await client.connection.ready;
+} catch (err) {
+  // 'WebSocket did not connect within 3000ms'
+}
+```
+
+## Getting Actor Handles
+
+Access actors by name, then pass an instance ID:
+
+```ts
+const room = client.chat("general");
+const game = client.game("match-42");
+```
+
+Each call returns a typed `ActorHandle` — see [Actor Handles](/client/actor-handles/) for the full API.
+
+## Connection Lifecycle
+
+### `connection.ready`
+
+A promise that resolves when the WebSocket connection is open:
+
+```ts
+await client.connection.ready;
+console.log("Connected!");
+```
+
+Also available as `client.$ready` for convenience.
+
+### `client.connection`
+
+The `connection` object provides everything you need for connection lifecycle management:
+
+```ts
+// Wait for the connection to be ready
+await client.connection.ready;
+
+// Read current status synchronously
+client.connection.status // "connecting" | "connected" | "reconnecting" | "disconnected"
+
+// Subscribe to status changes
+const unsub = client.connection.subscribe((status) => {
+  console.log("Connection:", status);
+});
+
+// Close the connection
+client.connection.close();
+```
+
+`connection.close()` (also available as `client.$close()`) gracefully shuts down the client:
+1. Stops any pending reconnect attempts
+2. Disposes all active actor handles (unsubscribes from events/state)
+3. Rejects all pending RPCs with `"WebSocket client closed"`
+4. Closes the WebSocket
+
+After closing, the client cannot be reused. Create a new client to reconnect.
+
+**Status transitions:**
+
+| From | To | When |
+| :--- | :- | :--- |
+| `connecting` | `connected` | Initial WebSocket connection opens |
+| `connected` | `reconnecting` | Socket drops unexpectedly |
+| `reconnecting` | `connected` | Reconnect succeeds |
+| any | `disconnected` | `close()` called, or reconnect disabled and socket drops |
+
+**In React**, use the `useConnectionStatus()` hook instead (see [React Hooks](/react/hooks/)):
+
+```tsx
+function StatusBanner() {
+  const status = useConnectionStatus();
+  if (status === "reconnecting") return <div>Reconnecting...</div>;
+  return null;
+}
+```
+
+## Reconnection
+
+By default, the client automatically reconnects when the WebSocket closes unexpectedly. Reconnection uses exponential backoff with jitter (250ms → 500ms → 1s → 2s cap).
+
+```ts
+const client = createClient<typeof app>({
+  url: "ws://localhost:3000",
+  reconnect: true, // default
+});
+```
+
+When a reconnection succeeds:
+- All active event and state subscriptions are **automatically re-sent** to the server
+- State subscribers receive a fresh snapshot
+- New RPC calls work immediately
+
+When the socket drops during reconnection:
+- All **pending RPCs are rejected** — the caller gets an error and can decide whether to retry
+- The client schedules another reconnect attempt
+
+To disable reconnection:
+
+```ts
+const client = createClient<typeof app>({
+  url: "ws://localhost:3000",
+  reconnect: false,
+});
+```
+
+### Why pending RPCs are rejected (not resent)
+
+Unlike some frameworks that buffer and resend pending requests on reconnect, Zocket rejects them. This is intentional — actor methods are often non-idempotent mutations (e.g., `sendMessage`). Auto-resending could cause duplicates if the server partially processed the request before the disconnect. The caller is in the best position to decide whether to retry.
+
+## RPC Behavior
+
+All method calls on actor handles go through WebSocket as request/response messages:
+
+1. Client generates a unique request ID and sends an `rpc` message
+2. Server processes the method and sends back an `rpc:result` with the same ID
+3. Client resolves the promise with the result (or rejects with the error)
+
+RPCs **wait for the socket to be ready** before sending. If the socket is currently reconnecting, the RPC waits (up to `rpcTimeout`) for it to reopen:
+
+```ts
+// Works even if the socket is momentarily down — waits for reconnect
+const result = await room.getSnapshot();
+```
+
+An RPC will reject if:
+- The `rpcTimeout` elapses (including wait time)
+- The WebSocket closes while the RPC is pending
+- The server returns an error (validation, middleware, handler throw)
+- `$close()` is called
+
+## Error Handling
+
+```ts
+try {
+  await room.sendMessage({ text: "hello" });
+} catch (err) {
+  console.error(err.message);
+  // Possible messages:
+  // - 'RPC "sendMessage" timed out after 10000ms'
+  // - 'WebSocket closed'
+  // - 'Validation failed for sendMessage: [...]'
+  // - 'Forbidden' (from middleware)
+}
+```
+
+## How It Works
+
+`createClient` returns a `Proxy` object. When you access `client.chat`, it returns a function. Calling that function (`client.chat("room-1")`) creates or retrieves a shared `ActorHandleImpl` for that `(actorName, actorId)` pair.
+
+Handles are **reference-counted** — multiple consumers can share the same handle. When the ref count drops to zero, disposal is deferred by one tick to support React StrictMode's unmount/remount cycle.

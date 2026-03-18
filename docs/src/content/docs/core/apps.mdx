@@ -1,0 +1,61 @@
+---
+title: Apps
+description: Bundle actor definitions into a typed application.
+---
+
+An **App** bundles one or more actor definitions into a single object that the server, client, and React packages can consume.
+
+## Creating an App
+
+```ts
+import { createApp } from "@zocket/core";
+import { ChatRoom } from "./chat";
+import { GameMatch } from "./game";
+
+export const app = createApp({
+  actors: {
+    chat: ChatRoom,
+    game: GameMatch,
+  },
+});
+```
+
+The keys you choose (`chat`, `game`) become the **actor names** used everywhere:
+
+- **Server** — the handler routes RPC calls to the correct actor by name
+- **Client** — `client.chat("room-1")` returns a typed handle for the `chat` actor
+- **React** — `useActor("chat", "room-1")` uses the same name
+
+## Type Inference
+
+The `AppDef` type carries the full type information of all registered actors. Pass `typeof app` as a generic to the client and React factories:
+
+```ts
+import { createClient } from "@zocket/client";
+import type { app } from "./server";
+
+// Full type inference — no manual types needed
+const client = createClient<typeof app>({ url: "ws://localhost:3000" });
+
+const room = client.chat("general");
+//    ^? ActorHandle with sendMessage, on("newMessage"), state, etc.
+```
+
+## AppDef Shape
+
+The returned object has this shape:
+
+```ts
+interface AppDef<TActors> {
+  readonly _tag: "AppDef";
+  readonly actors: TActors; // Record<string, ActorDef>
+}
+```
+
+The `_tag` discriminant is used internally for type narrowing. You generally don't need to interact with it directly.
+
+## Naming Conventions
+
+- Use **camelCase** for actor names: `chat`, `gameMatch`, `drawingRoom`
+- Each name must be unique within an app
+- The name is used as-is in the wire protocol (`{ actor: "chat", actorId: "room-1" }`)

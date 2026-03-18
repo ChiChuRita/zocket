@@ -1,0 +1,239 @@
+---
+title: Multiplayer Draw
+description: Full walkthrough of the example-draw package — a multiplayer drawing game built with Zocket.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+This guide walks through `packages/example-draw`, a complete multiplayer drawing & guessing game built with Zocket.
+
+## Overview
+
+Players join a room, take turns drawing a secret word on a shared canvas, and others try to guess it. The game demonstrates:
+
+- Actor state with complex schemas (players, strokes, phases)
+- Typed methods with input validation
+- Events (`correctGuess`)
+- Lifecycle hooks (`onDisconnect` to clean up players)
+- React hooks (`useActor`, `useActorState`, `useEvent`)
+
+## 1. Game Actor
+
+The `DrawingRoom` actor manages all game state:
+
+```ts
+// game.ts
+import { z } from "zod";
+import { actor, createApp } from "@zocket/core";
+
+const Stroke = z.object({
+  points: z.array(z.tuple([z.number(), z.number()])),
+  color: z.string(),
+  width: z.number(),
+});
+
+export const DrawingRoom = actor({
+  state: z.object({
+    players: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      score: z.number(),
+      color: z.string(),
+      connectionId: z.string().default(""),
+    })).default([]),
+    phase: z.enum(["lobby", "drawing", "roundEnd"]).default("lobby"),
+    drawerId: z.string().default(""),
+    word: z.string().default(""),
+    hint: z.string().default(""),
+    strokes: z.array(Stroke).default([]),
+    guesses: z.array(z.object({
+      playerId: z.string(),
+      name: z.string(),
+      text: z.string(),
+      correct: z.boolean(),
+    })).default([]),
+    round: z.number().default(0),
+    maxRounds: z.number().default(3),
+  }),
+
+  methods: {
+    join: {
+      input: z.object({ name: z.string() }),
+      handler: ({ state, input, connectionId }) => {
+        // Reconnect if player exists
+        const existing = state.players.find((p) => p.name === input.name);
+        if (existing) {
+          existing.connectionId = connectionId;
+          return { playerId: existing.id, color: existing.color };
+        }
+        // New player
+        const playerId = Math.random().toString(36).slice(2, 10);
+        const color = PLAYER_COLORS[state.players.length % PLAYER_COLORS.length];
+        state.players.push({
+          id: playerId, name: input.name,
+          score: 0, color, connectionId,
+        });
+        return { playerId, color };
+      },
+    },
+
+    startRound: {
+      handler: ({ state }) => {
+        if (state.players.length < 2) throw new Error("Need at least 2 players");
+        state.round += 1;
+        state.strokes = [];
+        state.guesses = [];
+        state.drawerId = state.players[(state.round - 1) % state.players.length].id;
+        state.word = pickRandom(WORDS);
+        state.hint = generateHint(state.word);
+        state.phase = "drawing";
+      },
+    },
+
+    draw: {
+      input: z.object({ stroke: Stroke }),
+      handler: ({ state, input }) => {
+        if (state.phase === "drawing") state.strokes.push(input.stroke);
+      },
+    },
+
+    guess: {
+      input: z.object({ playerId: z.string(), text: z.string() }),
+      handler: ({ state, input, emit }) => {
+        if (state.phase !== "drawing") return { correct: false };
+        const player = state.players.find((p) => p.id === input.playerId);
+        if (!player) return { correct: false };
+
+        const correct = input.text.trim().toLowerCase() === state.word.toLowerCase();
+        state.guesses.push({
+          playerId: input.playerId, name: player.name,
+          text: correct ? "Guessed correctly!" : input.text,
+          correct,
+        });
+
+        if (correct) {
+          player.score += 10;
+          emit("correctGuess", { name: player.name, word: state.word });
+          state.phase = "roundEnd";
+        }
+        return { correct };
+      },
+    },
+  },
+
+  events: {
+    correctGuess: z.object({ name: z.string(), word: z.string() }),
+  },
+
+  onDisconnect({ state, connectionId }) {
+    const idx = state.players.findIndex((p) => p.connectionId === connectionId);
+    if (idx === -1) return;
+    const wasDrawer = state.players[idx].id === state.drawerId;
+    state.players.splice(idx, 1);
+    if (wasDrawer && state.phase === "drawing") {
+      state.phase = "lobby";
+      state.word = "";
+      state.strokes = [];
+    }
+  },
+});
+
+export const app = createApp({ actors: { draw: DrawingRoom } });
+```
+
+<Aside type="tip">
+  The `onDisconnect` hook handles player cleanup and resets the game if the drawer leaves mid-round.
+</Aside>
+
+## 2. Server
+
+The entire server is two lines:
+
+```ts
+// server.ts
+import { serve } from "@zocket/server/bun";
+import { app } from "./game";
+
+const server = serve(app, { port: 3001 });
+console.log(`Zocket server on ws://localhost:${server.port}`);
+```
+
+## 3. Client Setup
+
+```ts
+// src/zocket.ts
+import { createClient } from "@zocket/client";
+import { createZocketReact } from "@zocket/react";
+import type { app } from "../game";
+
+export const client = createClient<typeof app>({
+  url: "ws://localhost:3001",
+});
+
+export const {
+  ZocketProvider,
+  useClient,
+  useActor,
+  useEvent,
+  useActorState,
+} = createZocketReact<typeof app>();
+```
+
+## 4. React Components
+
+### App Shell
+
+```tsx
+// src/App.tsx
+function RoomView() {
+  const roomId = window.location.hash.slice(1) || "room-1";
+  const room = useActor("draw", roomId);
+  const phase = useActorState(room, (s) => s.phase);
+  const [playerId, setPlayerId] = useState<string | null>(null);
+
+  if (!phase || phase === "lobby") {
+    return <Lobby room={room} playerId={playerId} onJoin={setPlayerId} />;
+  }
+  return <GameBoard room={room} playerId={playerId ?? ""} />;
+}
+
+export function App() {
+  return (
+    <ZocketProvider client={client}>
+      <RoomView />
+    </ZocketProvider>
+  );
+}
+```
+
+### State Selectors
+
+Components subscribe to exactly the state they need:
+
+```tsx
+// Only re-renders when phase changes
+const phase = useActorState(room, (s) => s.phase);
+
+// Only re-renders when players array changes
+const players = useActorState(room, (s) => s.players);
+
+// Only re-renders when strokes change (for the canvas)
+const strokes = useActorState(room, (s) => s.strokes);
+```
+
+### Event Handling
+
+```tsx
+// Show a toast when someone guesses correctly
+useEvent(room, "correctGuess", ({ name, word }) => {
+  toast(`${name} guessed "${word}"!`);
+});
+```
+
+## Key Takeaways
+
+1. **One actor = one game room** — state, methods, events, and lifecycle in a single definition
+2. **Sequential execution** — no race conditions on guesses or draws
+3. **Selective subscriptions** — components only re-render for the state they use
+4. **Lifecycle management** — `onDisconnect` handles player cleanup automatically
+5. **Two-line server** — `serve(app, { port })` is all you need

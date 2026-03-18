@@ -1,0 +1,52 @@
+---
+import { Button } from "../components/ui/button";
+---
+
+<section class="flex flex-row items-center justify-between overflow-visible">
+  <header class="relative flex flex-col gap-5">
+    <div
+      class="bg-primary absolute left-1/2 top-1/2 -z-10 h-full w-full -translate-x-1/2 -translate-y-1/2 opacity-[15%] blur-[100px] xl:opacity-10"
+    >
+    </div>
+    <h1>
+      typed <span class="text-primary">actors</span>
+      <br /> for realtime apps
+    </h1>
+    <h3 class="max-w-lg">
+      Define stateful actors with typed methods, events, and state — then call
+      them from any client with full end-to-end type safety over WebSockets.
+    </h3>
+    <div class="flex flex-row gap-4">
+      <a href="/getting-started/" class="w-fit">
+        <Button
+          className="w-fit xl:text-lg px-4 xl:px-8"
+          size="lg"
+        >
+          Get Started
+        </Button>
+      </a>
+      <a href="https://github.com/ChiChuRita/zocket" class="flex w-fit">
+        <Button
+          variant={"secondary"}
+          className="w-fit text-lg flex gap-3 px-4 xl:px-8"
+          size="lg"
+        >
+          <img src="/github-mark-white.svg" class="w-6" alt="Github logo" />
+          zocket
+        </Button>
+      </a>
+    </div>
+  </header>
+  <div class="relative flex w-fit pr-0 md:pr-20 xl:pr-20">
+    <img
+      src="/sock2.svg"
+      alt="left sock"
+      class="animate-wiggle-left invisible h-0 w-0 origin-[70%_0] object-cover xl:visible xl:h-[500px] xl:w-[500px]"
+    />
+    <img
+      src="/sock1.svg"
+      alt="right sock"
+      class="animate-wiggle-right invisible absolute left-20 top-20 h-0 w-0 origin-[70%_-0] object-cover drop-shadow-2xl xl:visible xl:h-[500px] xl:w-[500px]"
+    />
+  </div>
+</section>

@@ -1,0 +1,154 @@
+---
+title: Actor Handles
+description: Proxy methods, events, state subscriptions, and lifecycle management.
+---
+
+An **Actor Handle** is the client-side proxy for a single actor instance. It provides typed methods, event subscriptions, state subscriptions, and lifecycle management.
+
+## Getting a Handle
+
+```ts
+const room = client.chat("room-1");
+```
+
+This returns a typed `ActorHandle<typeof ChatRoom>` — all methods, events, and state types are inferred.
+
+## Calling Methods (RPC)
+
+Methods are accessed directly on the handle. Every method call is an RPC — a request sent over WebSocket with a unique ID, resolved when the server responds:
+
+```ts
+// Method with input
+await room.sendMessage({ text: "hello" });
+
+// Method without input
+const count = await counter.increment();
+
+// Method with return value
+const { playerId, color } = await game.join({ name: "Alice" });
+```
+
+### How RPC works under the hood
+
+1. The client generates a unique request ID (`rpc_{counter}_{timestamp}`)
+2. Sends `{ type: "rpc", id, actor, actorId, method, input }` over WebSocket
+3. The server processes the method (queued, single-writer) and sends back `{ type: "rpc:result", id, result }` or `{ type: "rpc:result", id, error }`
+4. The client matches the response by ID and resolves or rejects the promise
+
+### Waiting for connection
+
+RPCs automatically wait for the WebSocket to be ready. If the socket is reconnecting, the RPC waits (up to `rpcTimeout`) for it to reopen before sending:
+
+```ts
+// This works even during a brief reconnect — the call waits for the socket
+const messages = await room.getMessages();
+```
+
+The `rpcTimeout` covers the full lifecycle: wait-for-open + server response time.
+
+### Error cases
+
+```ts
+try {
+  await room.sendMessage({ text: "hello" });
+} catch (err) {
+  // Possible errors:
+  // - 'RPC "sendMessage" timed out after 10000ms' (timeout)
+  // - 'WebSocket closed' (socket dropped while RPC was pending)
+  // - 'Validation failed for sendMessage: [...]' (input validation)
+  // - 'Forbidden' (middleware rejection)
+  // - 'Unknown method: foo' (method doesn't exist)
+}
+```
+
+### Return values
+
+If a handler returns a value, the client receives it. If a handler returns void, the client receives `undefined`. Both cases go through the same RPC flow — every method call gets an acknowledgement from the server:
+
+```ts
+// Server: returns { count: number }
+const result = await counter.increment(); // { count: 1 }
+
+// Server: returns void
+await room.clear(); // undefined (but still waits for server confirmation)
+```
+
+This means you always know whether the server successfully processed your call, even for void methods. Errors (auth failures, validation, handler throws) are always surfaced.
+
+## Event Subscriptions
+
+Use `.on()` to listen for typed events:
+
+```ts
+const unsubscribe = room.on("newMessage", (payload) => {
+  // payload is typed: { text: string; from: string }
+  console.log(`${payload.from}: ${payload.text}`);
+});
+
+// Later:
+unsubscribe();
+```
+
+Event subscriptions are **lazy** — the client only sends an `event:sub` message to the server when the first listener is added. When all listeners are removed, it sends `event:unsub`.
+
+After a reconnect, active event subscriptions are automatically re-sent to the server.
+
+## State Subscriptions
+
+The `.state` object provides `subscribe()` and `getSnapshot()`:
+
+```ts
+// Subscribe to state changes
+const unsub = room.state.subscribe((state) => {
+  console.log("Current messages:", state.messages);
+});
+
+// Read current state synchronously
+const current = room.state.getSnapshot();
+```
+
+Like events, state subscriptions are lazy. The first `subscribe()` sends `state:sub` to the server, which triggers an immediate `state:snapshot` response. Subsequent mutations on the server are received as `state:patch` messages.
+
+After a reconnect, active state subscriptions are automatically re-sent, and the server sends a fresh snapshot.
+
+### How State Updates Work
+
+1. Server mutates state via Immer → generates JSON patches
+2. Server sends `state:patch` to all state subscribers
+3. Client's `StateStore` applies patches to local state copy
+4. All registered listeners are notified
+
+## Handle Metadata
+
+The `meta` object provides the handle's identity and lifecycle control:
+
+```ts
+room.meta.name    // "chat"
+room.meta.id      // "room-1"
+room.meta.dispose() // decrement ref count
+```
+
+| Property        | Type         | Description                       |
+| :-------------- | :----------- | :-------------------------------- |
+| `meta.name`     | `string`     | The actor name (e.g. `"chat"`)    |
+| `meta.id`       | `string`     | The instance ID (e.g. `"room-1"`) |
+| `meta.dispose()`| `() => void` | Decrement ref count               |
+
+## Disposing Handles
+
+Call `meta.dispose()` when you're done with a handle:
+
+```ts
+room.meta.dispose();
+```
+
+This decrements the reference count. When the ref count hits zero (after a one-tick delay), the handle:
+1. Unsubscribes from events on the server
+2. Unsubscribes from state on the server
+3. Clears all listeners and state
+
+### Reference Counting
+
+Multiple consumers can share the same handle. Each call to `client.chat("room-1")` increments the ref count. Each `meta.dispose()` decrements it. The handle is only truly disposed when the count reaches zero.
+
+The one-tick delay on final disposal ensures React StrictMode's temporary unmount/remount cycle doesn't kill shared handles.

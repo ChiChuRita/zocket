@@ -1,0 +1,28 @@
+---
+import { EndToEndClientExample } from "../components/code-blocks/end-to-end-client";
+import { EndToEndServerExample } from "../components/code-blocks/end-to-end-server";
+---
+
+<section class="relative flex flex-col gap-7">
+  <div
+    class="absolute left-1/2 top-1/2 -z-10 h-full w-full -translate-x-1/2 -translate-y-1/2 bg-[#0f9fff] opacity-20 blur-[200px] xl:opacity-10"
+  >
+  </div>
+  <header class="flex flex-col gap-2">
+    <h1>
+      end-to-end
+      <span class="text-[#0f9fff]">typesafety</span>
+    </h1>
+    <h3 class="max-w-lg">
+      With Zocket, your actor state, methods, and events are fully typed from
+      server to client using <a
+        class="font-medium text-[#0f9fff] hover:underline"
+        href="https://zod.dev/">Zod</a
+      > schemas. Never worry about sending the wrong data again.
+    </h3>
+  </header>
+  <div class="flex flex-col gap-10 xl:flex-row">
+    <EndToEndServerExample client:visible />
+    <EndToEndClientExample client:visible />
+  </div>
+</section>

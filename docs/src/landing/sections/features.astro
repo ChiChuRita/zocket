@@ -1,0 +1,162 @@
+---
+import { MiddlewareExample } from "../components/code-blocks/middleware";
+import {
+  ErrorClientExample,
+  ErrorServerExample,
+} from "../components/code-blocks/error";
+import { StateExample } from "../components/code-blocks/state";
+---
+
+<section class="flex flex-col gap-7">
+  <header class="flex flex-col gap-2">
+    <h1>realtime on <span class="text-emerald-500">steroids</span></h1>
+    <h3 class="max-w-lg">Batteries included. Type-safe by default.</h3>
+  </header>
+  <div class="flex grid-cols-12 grid-rows-[8] flex-col gap-10 xl:grid">
+    <div class="col-span-4 col-start-1 row-span-3 row-start-1">
+      <div
+        class="relative flex h-full flex-col gap-4 rounded-xl bg-gradient-to-br from-sky-500 to-emerald-500 p-4 xl:p-8"
+      >
+        <div
+          class="absolute left-1/2 top-full -z-10 h-[200%] w-full -translate-x-1/2 -translate-y-1/2 bg-sky-500 opacity-[25%] blur-[200px] xl:left-full xl:top-1/2 xl:h-full xl:w-[200%] xl:opacity-20"
+        >
+        </div>
+        <div class="flex flex-row items-center gap-3">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width={1.5}
+            stroke="white"
+            class="h-8 w-8 rounded-md bg-black/30 p-1"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M7.5 7.5h-.75A2.25 2.25 0 004.5 9.75v7.5a2.25 2.25 0 002.25 2.25h7.5a2.25 2.25 0 002.25-2.25v-7.5a2.25 2.25 0 00-2.25-2.25h-.75m-6 3.75l3 3m0 0l3-3m-3 3V1.5m6 9h.75a2.25 2.25 0 012.25 2.25v7.5a2.25 2.25 0 01-2.25 2.25h-7.5a2.25 2.25 0 01-2.25-2.25v-.75"
+            ></path>
+          </svg>
+          <h2>Middleware</h2>
+        </div>
+        <h3>
+          Add authentication, logging, and rate limiting with fully type-safe
+          middleware. Context flows through to your method handlers with complete
+          type inference.
+        </h3>
+        <h3>
+          Implementing authentication for realtime apps has never been easier.
+        </h3>
+      </div>
+    </div>
+    <div class="col-span-8 col-start-5 row-span-3 row-start-1">
+      <MiddlewareExample client:visible />
+    </div>
+    <div class="col-span-7 col-start-6 row-start-6">
+      <div
+        class="flex flex-col gap-4 rounded-xl bg-gradient-to-tl from-indigo-500 to-purple-500 p-4 xl:p-8"
+      >
+        <div class="flex flex-row items-center gap-3">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width={1.5}
+            stroke="white"
+            class="h-8 w-8 rounded-md bg-black/30 p-1"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+            ></path>
+          </svg>
+          <h2>Error Handling</h2>
+        </div>
+        <h3>
+          Throw typed errors from method handlers and catch them on the client
+          with full type information. Errors include codes and messages for
+          clean, predictable error handling.
+        </h3>
+      </div>
+    </div>
+    <div class="col-span-5 col-start-1 row-start-4">
+      <div
+        class="relative flex flex-col gap-4 rounded-xl bg-gradient-to-tl from-purple-500 to-pink-500 p-4 xl:p-8"
+      >
+        <div
+          class="absolute left-1/2 top-full -z-10 h-[200%] w-full -translate-x-1/2 -translate-y-1/2 bg-purple-500 opacity-[25%] blur-[200px] xl:left-full xl:top-full xl:h-full xl:w-[300%] xl:opacity-20"
+        >
+        </div>
+        <div class="flex flex-row items-center gap-3">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width={1.5}
+            stroke="white"
+            class="h-8 w-8 rounded-md bg-black/30 p-1"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"
+            ></path>
+          </svg>
+          <h2>Input Validation</h2>
+        </div>
+        <h3>
+          Every method input is validated at runtime using Zod schemas. Invalid
+          payloads are rejected before reaching your handler, keeping your actor
+          state consistent and your application safe.
+        </h3>
+      </div>
+    </div>
+
+    <div class="col-span-5 col-start-1 row-span-2 row-start-5">
+      <ErrorClientExample client:visible />
+    </div>
+    <div class="col-span-7 col-start-6 row-span-2 row-start-4">
+      <ErrorServerExample client:visible />
+    </div>
+
+    <div class="col-span-6 row-span-2 row-start-7">
+      <div
+        class="relative flex h-full flex-col gap-4 rounded-xl bg-gradient-to-tl from-cyan-500 to-blue-500 p-4 xl:p-8"
+      >
+        <div
+          class="absolute left-1/2 top-full -z-10 h-[200%] w-full -translate-x-1/2 -translate-y-1/2 bg-blue-500 opacity-[25%] blur-[200px] xl:left-full xl:top-1/2 xl:h-full xl:w-[200%] xl:opacity-20"
+        >
+        </div>
+        <div class="flex flex-row items-center gap-3">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width={1.5}
+            stroke="white"
+            class="h-8 w-8 rounded-md bg-black/30 p-1"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"
+            ></path>
+          </svg>
+          <h2>State Subscriptions</h2>
+        </div>
+        <h3>
+          Subscribe to actor state with fine-grained selectors. Components only
+          re-render when the slice they care about changes. State is synchronized
+          via efficient JSON patches over the wire.
+        </h3>
+        <h3>
+          Multiple clients can subscribe to the same actor instance, each
+          receiving real-time updates as state changes.
+        </h3>
+      </div>
+    </div>
+    <div class="row-start-8 col-span-6 col-start-7 row-span-2">
+      <StateExample client:visible />
+    </div>
+  </div>
+</section>

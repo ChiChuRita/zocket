@@ -1,0 +1,144 @@
+---
+title: Comparison
+description: How Zocket compares to Socket.io, PartyKit, Convex, Liveblocks, and others.
+---
+
+Every tool in this space makes different tradeoffs. Here's an honest look at when you'd pick each one — and when you wouldn't.
+
+## Socket.io
+
+The battle-tested standard for realtime in Node.js.
+
+**Strengths:**
+- Massive ecosystem and community — tons of tutorials, plugins, and production battle scars
+- Automatic fallback to HTTP long-polling when WebSockets aren't available
+- Room and namespace abstractions built-in
+- Works with any language (has clients for Python, Java, Go, etc.)
+
+**Tradeoffs:**
+- Type safety is opt-in and manual — you define shared interfaces that can drift from the implementation
+- No runtime validation — payloads are untyped `any` by default
+- No built-in state management — you manage server state and sync it yourself
+- Event-string API (`socket.emit("event", ...)`) is error-prone at scale
+
+**Best for:** Teams that need broad runtime/language support, HTTP fallbacks, or are already invested in the Socket.io ecosystem.
+
+## PartyKit (Cloudflare)
+
+Edge-first realtime platform built on Cloudflare Workers and Durable Objects.
+
+**Strengths:**
+- Runs at the edge — low latency globally without managing infrastructure
+- Each "party" is an isolated stateful server (similar concept to actors)
+- Hibernation support — parties sleep when idle, saving costs
+- Managed platform — no servers to operate, scales automatically
+- Good integration with Cloudflare's ecosystem (KV, D1, R2)
+
+**Tradeoffs:**
+- Platform lock-in to Cloudflare — you can't self-host or run on other clouds
+- Limited TypeScript inference across the wire — client types are manual
+- No automatic state sync — you send messages and manage client state yourself
+- Durable Object constraints (single-region per party, storage limits)
+- Cloudflare Workers runtime limitations (no Node.js APIs, execution time limits)
+
+**Best for:** Teams that want managed infrastructure at the edge and are comfortable with Cloudflare lock-in. Great for apps where latency matters more than type safety DX.
+
+## Convex
+
+Reactive backend-as-a-service with a built-in database.
+
+**Strengths:**
+- Full reactive backend — queries automatically re-run and push updates when underlying data changes
+- Built-in database with ACID transactions — no external DB to manage
+- Excellent TypeScript support — functions are typed end-to-end
+- Scheduled functions, cron jobs, file storage, and auth built-in
+- Handles caching, pagination, and optimistic updates out of the box
+
+**Tradeoffs:**
+- Fully managed platform — you can't self-host or bring your own database
+- The reactive model is query-based, not actor-based — great for CRUD-like updates, less natural for game loops or stateful simulations
+- Vendor lock-in — your data and logic live on Convex's infrastructure
+- Pricing scales with function calls and database usage
+- Not designed for raw WebSocket use cases like streaming binary data
+
+**Best for:** Apps that are primarily data-driven (dashboards, collaborative docs, social feeds) where you want a complete reactive backend without managing infrastructure. Excellent choice if you don't need fine-grained control over the realtime protocol.
+
+## Liveblocks
+
+Collaborative infrastructure for building multiplayer experiences.
+
+**Strengths:**
+- Purpose-built for collaboration — presence, cursors, selection, comments, notifications out of the box
+- Conflict-free storage via Yjs/CRDT integration — true multi-writer without conflicts
+- Excellent React bindings with suspense support
+- Managed infrastructure — no backend to build for collaboration features
+- Rich pre-built components (comments, threads, notifications)
+
+**Tradeoffs:**
+- Collaboration-focused — not a general-purpose realtime framework
+- Managed service with per-MAU pricing — costs scale with users, not usage
+- Limited server-side logic — the server is Liveblocks' infrastructure, not yours
+- You can't define custom server-side methods or business logic in Liveblocks itself
+- Storage model is CRDT-based — powerful for collaboration, but overkill for simple state sync
+
+**Best for:** Teams building collaborative features (multiplayer cursors, shared editing, comments) who want polished, ready-made components. If your app is primarily about collaboration UX, Liveblocks gets you there faster than building from scratch.
+
+## Supabase Realtime
+
+Realtime layer on top of Postgres.
+
+**Strengths:**
+- Database-driven — changes to Postgres rows automatically broadcast to clients
+- Presence and broadcast channels built-in
+- Integrates with the full Supabase stack (auth, storage, edge functions)
+- Row-level security applies to realtime subscriptions
+- Open source — self-hostable
+
+**Tradeoffs:**
+- Tied to Postgres — realtime events are driven by database changes, not arbitrary server logic
+- No actor model or stateful server-side units
+- Limited control over message routing — it's pub/sub over database changes
+- Not ideal for high-frequency updates (game state, cursor positions) due to database overhead
+- TypeScript support exists but isn't as deeply inferred as purpose-built frameworks
+
+**Best for:** Apps already on Supabase that need realtime updates when database records change. Great for live feeds, notifications, and dashboards backed by Postgres.
+
+## Ably / Pusher
+
+Managed pub/sub messaging platforms.
+
+**Strengths:**
+- Global edge infrastructure — low latency, high availability, no servers to manage
+- Protocol-level features: message ordering, delivery guarantees, history, presence
+- Broad SDK support — works with any language, any platform
+- Handles reconnection, deduplication, and exactly-once delivery
+
+**Tradeoffs:**
+- Pure message transport — no server-side logic, state management, or actors
+- You build the application layer yourself on top of pub/sub primitives
+- Per-message pricing can get expensive at scale
+- No type safety across the wire — messages are untyped payloads
+- Not open source (Ably has an open protocol, but the platform is managed)
+
+**Best for:** Apps that need reliable, global message delivery without building infrastructure — notifications, live scores, IoT telemetry. Less suited for stateful multiplayer where you need server-side logic.
+
+## Quick Comparison
+
+| | Zocket | Socket.io | PartyKit | Convex | Liveblocks | Supabase Realtime |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Type safety** | ✅ Fully inferred | ⚠️ Manual | ⚠️ Manual | ✅ End-to-end | ✅ SDK-typed | ⚠️ Generated |
+| **State sync** | ✅ Auto (JSON patches) | ❌ DIY | ❌ DIY | ✅ Auto (reactive queries) | ✅ Auto (CRDTs) | ✅ Auto (DB rows) |
+| **Server logic** | ✅ Actor methods | ⚠️ Event handlers | ✅ Party class | ✅ Server functions | ❌ Managed only | ⚠️ Edge functions |
+| **Concurrency** | ✅ Sequential per actor | ❌ DIY | ✅ Single-threaded per party | ✅ Serialized transactions | ✅ CRDT merge | ✅ DB transactions |
+| **Self-hostable** | ✅ Yes | ✅ Yes | ❌ Cloudflare only | ❌ No | ❌ No | ✅ Yes |
+| **React bindings** | ✅ Built-in | ⚠️ Community | ⚠️ Community | ✅ Built-in | ✅ Built-in | ✅ Built-in |
+
+## When to use something else
+
+- **You need HTTP fallbacks or broad language support** — use Socket.io
+- **You want zero infrastructure and edge deployment** — use PartyKit
+- **Your app is data/CRUD-driven and you want a full reactive backend** — use Convex
+- **You're building collaborative editing with cursors, comments, and presence** — use Liveblocks
+- **You need realtime updates from Postgres changes** — use Supabase Realtime
+- **You need global pub/sub with delivery guarantees** — use Ably or Pusher
+- **Your app is purely request/response** — use tRPC

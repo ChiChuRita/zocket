@@ -1,0 +1,70 @@
+---
+title: State Store
+description: Client-side state management with snapshots and JSON patches.
+---
+
+Each actor handle has an internal `StateStore` that manages the client-side copy of the actor's state.
+
+## How It Works
+
+1. When you call `handle.state.subscribe()`, the client sends a `state:sub` message
+2. The server responds with a `state:snapshot` containing the full state
+3. On each state change, the server sends `state:patch` with JSON Patch operations
+4. The `StateStore` applies patches to its local copy and notifies subscribers
+
+## StateStore API
+
+```ts
+class StateStore<TState> {
+  getState(): TState | undefined;
+  setSnapshot(state: TState): void;
+  applyPatches(patches: JsonPatchOp[]): void;
+  subscribe(listener: (state: TState) => void): Unsubscribe;
+  get subscriberCount(): number;
+}
+```
+
+You typically interact with the store through the handle's `.state` property, not directly.
+
+## JSON Patch Support
+
+The store implements a subset of RFC 6902:
+
+| Operation | Description |
+| :-------- | :---------- |
+| `add`     | Add a value at a path (including array append with `-`) |
+| `replace` | Replace the value at a path |
+| `remove`  | Remove the value at a path |
+
+### Path Syntax
+
+Paths follow JSON Pointer syntax (RFC 6901):
+
+```
+/messages/0/text    → state.messages[0].text
+/players/-          → append to state.players array
+/count              → state.count
+```
+
+Special characters are escaped: `~0` for `~`, `~1` for `/`.
+
+## Immutability
+
+Patches are applied using `structuredClone()` — each update produces a new state object. This ensures React's `useSyncExternalStore` detects changes correctly.
+
+## Subscriber Notification
+
+Subscribers are called synchronously after each state update (snapshot or patch). If state is `undefined` (no snapshot received yet), subscribers are not called.
+
+When a new subscriber is added and state is already available, the subscriber is called immediately with the current state.
+
+## Integration with React
+
+The `useActorState` hook from `@zocket/react` is built on top of `StateStore`:
+
+```tsx
+// Subscribes to the store, re-renders on changes
+const messages = useActorState(room, (s) => s.messages);
+```
+
+See [React Hooks](/react/hooks/) for details on selectors and memoization.

@@ -1,0 +1,38 @@
+---
+import { Button } from "./ui/button";
+---
+
+<nav
+  class="bg-background/70 sticky top-0 z-50 flex w-full flex-row items-center justify-center py-3 backdrop-blur-lg backdrop-saturate-150"
+>
+  <header
+    class="flex w-full flex-col items-center justify-between px-6 xl:container xl:flex-row"
+  >
+    <div class="flex flex-row items-center gap-2">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/favicon.svg" alt="Zocket logo" class="h-8 w-8" />
+        <h2>Zocket</h2>
+      </a>
+    </div>
+    <ul class="flex items-center gap-3">
+      <div class="flex items-center gap-1">
+        <li>
+          <a href="/getting-started/">
+            <Button size="sm" variant="ghost">Docs</Button>
+          </a>
+        </li>
+        <li>
+          <a href="https://github.com/ChiChuRita/zocket">
+            <Button size="sm" variant="ghost">
+              <img src="/github-mark-white.svg" class="mr-2 w-4" alt="GitHub" />
+              GitHub
+            </Button>
+          </a>
+        </li>
+      </div>
+      <a href="/getting-started/">
+        <Button size="sm">Get Started</Button>
+      </a>
+    </ul>
+  </header>
+</nav>

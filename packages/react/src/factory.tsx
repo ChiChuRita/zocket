@@ -1,159 +1,228 @@
-import React, { createContext, useContext, type DependencyList, type ReactNode } from "react";
-import type { AnyRouter } from "@zocket/core";
-import type { ZocketClient } from "@zocket/client";
-
-import type {
-  ConnectionState,
-} from "./hooks";
-
 import {
-  useConnectionState as useConnectionStateBase,
-  useEvent as useEventBase,
-} from "./hooks";
+  createContext,
+  useContext,
+  useRef,
+  useEffect,
+  useCallback,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
+import type {
+  AppDef,
+  ClientApi,
+  Unsubscribe,
+} from "@zocket/core";
 
-// ============================================================================
-// Types
-// ============================================================================
+// ---------------------------------------------------------------------------
+// createZocketReact — factory that produces typed hooks + provider
+// ---------------------------------------------------------------------------
 
-type UnsubscribeFn = () => void;
-type SubscribeFn<T> = (callback: (data: T) => void) => UnsubscribeFn;
+type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "disconnected";
 
-export interface ZocketReactHooks<TRouter extends AnyRouter> {
-  /**
-   * Provider component that wraps your app and provides the Zocket client
-   */
-  ZocketProvider: React.FC<{
-    client: ZocketClient<TRouter>;
-    children: ReactNode;
-  }>;
-
-  /**
-   * Get the typed Zocket client instance
-   */
-  useClient: () => ZocketClient<TRouter>;
-
-  /**
-   * Track the WebSocket connection state
-   */
-  useConnectionState: () => ConnectionState;
-
-  /**
-   * Subscribe to events from the server
-   * @param subscribe - The subscription function (e.g., client.on.chat.message)
-   * @param handler - Callback when event is received
-   * @param deps - Optional dependency array for re-subscribing
-   */
-  useEvent: <T>(
-    subscribe: SubscribeFn<T>,
-    handler: (data: T) => void,
-    deps?: DependencyList
-  ) => void;
-}
-
-// ============================================================================
-// Factory
-// ============================================================================
+type ClientWithExtras<TApp extends AppDef<any>> = ClientApi<TApp> & {
+  connection: {
+    ready: Promise<void>;
+    status: ConnectionStatus;
+    subscribe(cb: (status: ConnectionStatus) => void): () => void;
+    close(): void;
+  };
+  on(event: "status", cb: (status: ConnectionStatus) => void): () => void;
+};
 
 /**
- * Create typed React hooks for your Zocket router.
- *
- * @example
- * ```tsx
- * // lib/zocket.ts
- * import { createZocketReact } from '@zocket/react';
- * import type { AppRouter } from './server';
- *
- * export const zocket = createZocketReact<AppRouter>();
- *
- * // App.tsx
- * import { zocket } from './lib/zocket';
- * import { createZocketClient } from '@zocket/client';
- *
- * const client = createZocketClient<AppRouter>('ws://localhost:3000');
- *
- * function App() {
- *   return (
- *     <zocket.ZocketProvider client={client}>
- *       <MyComponent />
- *     </zocket.ZocketProvider>
- *   );
- * }
- *
- * function MyComponent() {
- *   const client = zocket.useClient();
- *   const { status } = zocket.useConnectionState();
- *
- *   zocket.useEvent(client.on.chat.message, (msg) => {
- *     console.log('New message:', msg);
- *   });
- *
- *   return <div>...</div>;
- * }
- * ```
+ * Structural shape accepted by hooks — any object with `.state`, `.on`,
+ * `.$actorName`, `.$actorId` matching an ActorHandle.
+ * Avoids the need for phantom types or conditional-type unwrapping.
  */
-export function createZocketReact<
-  TRouter extends AnyRouter
->(): ZocketReactHooks<TRouter> {
-  // Create a context specific to this router type
-  const ZocketClientContext = createContext<ZocketClient<TRouter> | null>(null);
+interface HandleLike<TState = unknown> {
+  on: (...args: any[]) => any;
+  state: {
+    subscribe: (listener: (state: TState) => void) => Unsubscribe;
+    getSnapshot: () => TState | undefined;
+  };
+  meta?: {
+    dispose?: () => void;
+  };
+  $actorName: string;
+  $actorId: string;
+}
 
-  // -------------------------------------------------------------------------
-  // ZocketProvider
-  // -------------------------------------------------------------------------
+export function createZocketReact<TApp extends AppDef<any>>() {
+  const ClientContext = createContext<ClientWithExtras<TApp> | null>(null);
+
   function ZocketProvider({
     client,
     children,
   }: {
-    client: ZocketClient<TRouter>;
+    client: ClientWithExtras<TApp>;
     children: ReactNode;
   }) {
     return (
-      <ZocketClientContext.Provider value={client}>
-        {children}
-      </ZocketClientContext.Provider>
+      <ClientContext.Provider value={client}>{children}</ClientContext.Provider>
     );
   }
 
-  // -------------------------------------------------------------------------
-  // useClient
-  // -------------------------------------------------------------------------
-  function useClient(): ZocketClient<TRouter> {
-    const client = useContext(ZocketClientContext);
+  function useClient(): ClientWithExtras<TApp> {
+    const client = useContext(ClientContext);
     if (!client) {
-      throw new Error(
-        "useClient must be used within a ZocketProvider. " +
-        "Make sure to wrap your component tree with <ZocketProvider client={...}>."
-      );
+      throw new Error("useClient must be used within <ZocketProvider>");
     }
     return client;
   }
 
-  // -------------------------------------------------------------------------
-  // useConnectionState
-  // -------------------------------------------------------------------------
-  function useConnectionState(): ConnectionState {
+  /**
+   * Get a stable, fully-typed ActorHandle for the given actor name + id.
+   * The handle is ref-counted, so multiple components can share the same
+   * actor without one unmount killing the other's connection.
+   *
+   * All methods, events, and state are automatically typed from your actor definition —
+   * no manual type annotations needed.
+   *
+   * ```tsx
+   * const room = useActor("chat", roomId)
+   * await room.sendMessage({ text: "hi" })        // typed input + return
+   * room.on("message", (msg) => console.log(msg))  // typed payload
+   * ```
+   */
+  function useActor<K extends keyof ClientApi<TApp>>(
+    actorName: K,
+    actorId: string,
+  ): ReturnType<ClientApi<TApp>[K]> {
     const client = useClient();
-    return useConnectionStateBase(client);
+    const ref = useRef<{ key: string; handle: ReturnType<ClientApi<TApp>[K]> } | null>(
+      null,
+    );
+
+    const key = `${String(actorName)}:${actorId}`;
+    if (!ref.current || ref.current.key !== key) {
+      const factory = (client as any)[actorName] as (id: string) => any;
+      ref.current = { key, handle: factory(actorId) };
+    }
+
+    useEffect(() => {
+      const current = ref.current;
+      return () => {
+        current?.handle.meta?.dispose?.();
+        current?.handle.$dispose?.();
+        ref.current = null;
+      };
+    }, [key]);
+
+    return ref.current.handle;
   }
 
-  // -------------------------------------------------------------------------
-  // useEvent
-  // -------------------------------------------------------------------------
-  function useEvent<T>(
-    subscribe: SubscribeFn<T>,
-    handler: (data: T) => void,
-    deps: DependencyList = []
+  /**
+   * Lifecycle wrapper for actor events — subscribes on mount, unsubscribes on unmount.
+   *
+   * For **full type inference** on event names and payloads, use `room.on()` directly.
+   * `room.on("message", cb)` already infers the payload type from your actor definition.
+   * This hook exists purely for React lifecycle convenience (auto-cleanup).
+   *
+   * ```tsx
+   * // Typed — payload is inferred:
+   * useEvent(room, "message", (payload) => { playSound() })
+   *
+   * // Equivalent manual approach with full types:
+   * useEffect(() => room.on("message", (msg) => playSound()), [room])
+   * ```
+   */
+  function useEvent<TState>(
+    handle: HandleLike<TState>,
+    event: string,
+    callback: (payload: any) => void,
   ): void {
-    return useEventBase(subscribe, handler, deps);
+    const cbRef = useRef(callback);
+    cbRef.current = callback;
+
+    useEffect(() => {
+      const unsub = handle.on(event, (payload: any) => {
+        cbRef.current(payload);
+      });
+      return unsub;
+    }, [handle, event]);
   }
 
-  // -------------------------------------------------------------------------
-  // Return all hooks
-  // -------------------------------------------------------------------------
+  /**
+   * Subscribe to actor state with an optional selector. Re-renders only when
+   * the selected value changes (shallow compare).
+   *
+   * TState is inferred structurally from the handle's `state.subscribe` signature.
+   *
+   * ```tsx
+   * const messages = useActorState(room, s => s.messages)
+   * const fullState = useActorState(room)
+   * ```
+   */
+  function useActorState<TState, TSelected = TState>(
+    handle: HandleLike<TState>,
+    selector?: (state: TState) => TSelected,
+  ): TSelected | undefined {
+    const selectorRef = useRef(selector);
+    selectorRef.current = selector;
+
+    const cacheRef = useRef<{
+      state: unknown;
+      selected: TSelected | undefined;
+    }>({ state: undefined, selected: undefined });
+
+    const subscribe = useCallback(
+      (onStoreChange: () => void) => {
+        const unsub = handle.state.subscribe(() => {
+          onStoreChange();
+        });
+        return unsub;
+      },
+      [handle],
+    );
+
+    const getSnapshot = useCallback((): TSelected | undefined => {
+      const rawState = handle.state.getSnapshot();
+      if (rawState === undefined) return undefined;
+
+      const sel = selectorRef.current;
+      if (!sel) return rawState as TSelected;
+
+      if (rawState !== cacheRef.current.state) {
+        cacheRef.current.state = rawState;
+        cacheRef.current.selected = sel(rawState);
+      }
+      return cacheRef.current.selected;
+    }, [handle]);
+
+    return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  }
+
+  /**
+   * Returns the current WebSocket connection status.
+   * Re-renders automatically when the status changes.
+   *
+   * ```tsx
+   * const status = useConnectionStatus()
+   * if (status === "reconnecting") return <Banner>Reconnecting...</Banner>
+   * ```
+   */
+  function useConnectionStatus(): ConnectionStatus {
+    const client = useClient();
+
+    const subscribe = useCallback(
+      (onStoreChange: () => void) => client.connection.subscribe(() => onStoreChange()),
+      [client],
+    );
+
+    const getSnapshot = useCallback(
+      () => client.connection.status,
+      [client],
+    );
+
+    return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  }
+
   return {
     ZocketProvider,
     useClient,
-    useConnectionState,
+    useActor,
     useEvent,
+    useActorState,
+    useConnectionStatus,
   };
 }

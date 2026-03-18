@@ -1,0 +1,24 @@
+
+export default new Map([
+["src/content/docs/client/actor-handles.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fclient%2Factor-handles.mdx&astroContentModuleFlag=true")],
+["src/content/docs/client/creating-a-client.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fclient%2Fcreating-a-client.mdx&astroContentModuleFlag=true")],
+["src/content/docs/client/state-store.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fclient%2Fstate-store.mdx&astroContentModuleFlag=true")],
+["src/content/docs/comparison.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fcomparison.mdx&astroContentModuleFlag=true")],
+["src/content/docs/core/actors.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fcore%2Factors.mdx&astroContentModuleFlag=true")],
+["src/content/docs/core/apps.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fcore%2Fapps.mdx&astroContentModuleFlag=true")],
+["src/content/docs/core/middleware.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fcore%2Fmiddleware.mdx&astroContentModuleFlag=true")],
+["src/content/docs/core/protocol.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fcore%2Fprotocol.mdx&astroContentModuleFlag=true")],
+["src/content/docs/core/types.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fcore%2Ftypes.mdx&astroContentModuleFlag=true")],
+["src/content/docs/getting-started.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fgetting-started.mdx&astroContentModuleFlag=true")],
+["src/content/docs/guides/authentication.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fguides%2Fauthentication.mdx&astroContentModuleFlag=true")],
+["src/content/docs/guides/multiplayer-draw.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fguides%2Fmultiplayer-draw.mdx&astroContentModuleFlag=true")],
+["src/content/docs/guides/state-management.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fguides%2Fstate-management.mdx&astroContentModuleFlag=true")],
+["src/content/docs/legacy/index.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Flegacy%2Findex.mdx&astroContentModuleFlag=true")],
+["src/content/docs/motivation.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fmotivation.mdx&astroContentModuleFlag=true")],
+["src/content/docs/react/hooks.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Freact%2Fhooks.mdx&astroContentModuleFlag=true")],
+["src/content/docs/react/setup.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Freact%2Fsetup.mdx&astroContentModuleFlag=true")],
+["src/content/docs/server/bun-adapter.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fserver%2Fbun-adapter.mdx&astroContentModuleFlag=true")],
+["src/content/docs/server/custom-handlers.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fserver%2Fcustom-handlers.mdx&astroContentModuleFlag=true")],
+["src/content/docs/server/deno-adapter.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fserver%2Fdeno-adapter.mdx&astroContentModuleFlag=true")],
+["src/content/docs/server/node-adapter.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fserver%2Fnode-adapter.mdx&astroContentModuleFlag=true")]]);
+		

@@ -1,0 +1,137 @@
+---
+title: Getting Started
+description: Install Zocket and build your first realtime actor in minutes.
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+## Installation
+
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bun add @zocket/core @zocket/server @zocket/client zod
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npm install @zocket/core @zocket/server @zocket/client zod
+    ```
+  </TabItem>
+</Tabs>
+
+For React integration, also add `@zocket/react`:
+
+```bash
+bun add @zocket/react
+```
+
+## 1. Define an Actor
+
+Actors are stateful units with typed methods, events, and lifecycle hooks.
+
+```ts
+// chat.ts
+import { z } from "zod";
+import { actor, createApp } from "@zocket/core";
+
+const ChatRoom = actor({
+  state: z.object({
+    messages: z.array(z.object({
+      from: z.string(),
+      text: z.string(),
+    })).default([]),
+  }),
+
+  methods: {
+    sendMessage: {
+      input: z.object({ from: z.string(), text: z.string() }),
+      handler: ({ state, input }) => {
+        state.messages.push(input);
+      },
+    },
+  },
+});
+
+export const app = createApp({ actors: { chat: ChatRoom } });
+```
+
+## 2. Serve It
+
+```ts
+// server.ts
+import { serve } from "@zocket/server/bun";
+import { app } from "./chat";
+
+const server = serve(app, { port: 3000 });
+console.log(`Zocket on ws://localhost:${server.port}`);
+```
+
+## 3. Connect a Client
+
+```ts
+// client.ts
+import { createClient } from "@zocket/client";
+import type { app } from "./chat";
+
+const client = createClient<typeof app>({ url: "ws://localhost:3000" });
+
+// Get a typed handle for a specific actor instance
+const room = client.chat("general");
+
+// Call methods — fully typed
+await room.sendMessage({ from: "Alice", text: "Hello!" });
+
+// Subscribe to state changes
+room.state.subscribe((state) => {
+  console.log("Messages:", state.messages);
+});
+
+// Clean up when done
+room.meta.dispose();
+```
+
+## 4. Use with React
+
+```tsx
+// zocket.ts
+import { createClient } from "@zocket/client";
+import { createZocketReact } from "@zocket/react";
+import type { app } from "./chat";
+
+export const client = createClient<typeof app>({ url: "ws://localhost:3000" });
+export const { ZocketProvider, useActor, useActorState } = createZocketReact<typeof app>();
+```
+
+```tsx
+// App.tsx
+import { ZocketProvider, useActor, useActorState, client } from "./zocket";
+
+function Chat() {
+  const room = useActor("chat", "general");
+  const messages = useActorState(room, (s) => s.messages);
+
+  return (
+    <ul>
+      {messages?.map((m, i) => (
+        <li key={i}>{m.from}: {m.text}</li>
+      ))}
+    </ul>
+  );
+}
+
+export function App() {
+  return (
+    <ZocketProvider client={client}>
+      <Chat />
+    </ZocketProvider>
+  );
+}
+```
+
+## Next Steps
+
+- [Actors](/core/actors/) — full API for state, methods, events, and lifecycle hooks
+- [Middleware](/core/middleware/) — auth, context enrichment, gating
+- [React Hooks](/react/hooks/) — `useActor`, `useActorState`, `useEvent`
+- [Multiplayer Draw](/guides/multiplayer-draw/) — complete example walkthrough

@@ -1,0 +1,147 @@
+---
+title: Types
+description: Type utilities for inference, handles, and client API shapes.
+---
+
+Zocket's type system is built around inference — you define actors once and the types flow through to the client and React layers automatically. The `@zocket/core` package exports several utility types for advanced use cases.
+
+## InferSchema
+
+Extract the output type from any Standard Schema:
+
+```ts
+import type { InferSchema } from "@zocket/core";
+import { z } from "zod";
+
+const UserSchema = z.object({ name: z.string(), age: z.number() });
+type User = InferSchema<typeof UserSchema>;
+// { name: string; age: number }
+```
+
+## InferState
+
+Extract the state type from an `ActorDef`:
+
+```ts
+import type { InferState } from "@zocket/core";
+
+type ChatState = InferState<typeof ChatRoom>;
+// { messages: { text: string; from: string }[] }
+```
+
+## InferMethods
+
+Map an actor's method definitions to callable signatures:
+
+```ts
+import type { InferMethods } from "@zocket/core";
+
+type ChatMethods = InferMethods<typeof ChatRoom>;
+// {
+//   sendMessage: (input: { text: string }) => Promise<void>;
+//   getHistory: () => Promise<Message[]>;
+// }
+```
+
+Methods with an `input` schema produce `(input: T) => Promise<R>`. Methods without input produce `() => Promise<R>`.
+
+## InferEvents
+
+Map event definitions to callback signatures:
+
+```ts
+import type { InferEvents } from "@zocket/core";
+
+type ChatEvents = InferEvents<typeof ChatRoom>;
+// {
+//   newMessage: (payload: { text: string; from: string }) => void;
+// }
+```
+
+## ActorHandle
+
+The client-facing typed handle for an actor instance. This is what `client.chat("room-1")` returns:
+
+```ts
+type ActorHandle<T extends ActorDef> = InferMethods<T> & {
+  on: <K extends keyof InferEvents<T>>(
+    event: K,
+    callback: InferEvents<T>[K],
+  ) => Unsubscribe;
+
+  state: {
+    subscribe: (listener: (state: InferState<T>) => void) => Unsubscribe;
+    getSnapshot: () => InferState<T> | undefined;
+  };
+
+  meta: ActorHandleMeta;
+};
+
+interface ActorHandleMeta {
+  name: string;
+  id: string;
+  dispose: () => void;
+}
+```
+
+## ClientApi
+
+Maps an `AppDef` to the client's top-level API shape:
+
+```ts
+type ClientApi<T extends AppDef> = {
+  [K in keyof T["actors"]]: (id: string) => ActorHandle<T["actors"][K]>;
+};
+```
+
+So for an app with `{ actors: { chat: ChatRoom, game: GameMatch } }`, the client type is:
+
+```ts
+{
+  chat: (id: string) => ActorHandle<typeof ChatRoom>;
+  game: (id: string) => ActorHandle<typeof GameMatch>;
+}
+```
+
+## TypedEmitFn
+
+Constrains event names and payload types to declared events:
+
+```ts
+type TypedEmitFn<TEvents> = <K extends keyof TEvents>(
+  event: K,
+  payload: InferSchema<TEvents[K]>,
+) => void;
+```
+
+Used internally by `MethodContext`. The `emit` function in handlers is automatically typed.
+
+## EventPayload
+
+Extract the payload type from a specific event:
+
+```ts
+import type { EventPayload } from "@zocket/core";
+
+type MsgPayload = EventPayload<typeof ChatRoom, "newMessage">;
+// { text: string; from: string }
+```
+
+## Wire Protocol Types
+
+For low-level protocol work, these types are also exported:
+
+```ts
+import type {
+  RpcCallMessage,
+  RpcResultMessage,
+  EventMessage,
+  StateSnapshotMessage,
+  StatePatchMessage,
+  JsonPatchOp,
+  ClientMessage,
+  ServerMessage,
+} from "@zocket/core";
+```
+
+See the [Protocol](/core/protocol/) page for details on each message format.

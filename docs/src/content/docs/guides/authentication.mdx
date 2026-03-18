@@ -1,0 +1,114 @@
+---
+title: Authentication
+description: Middleware-based auth patterns for Zocket actors.
+---
+
+Zocket uses middleware to enforce authentication before method handlers run.
+
+## The Pattern
+
+1. Create a middleware that verifies the connection
+2. Throw if unauthorized — the RPC is rejected and the handler never runs
+3. Return context (e.g. `userId`) that downstream handlers can use
+
+```ts
+import { middleware } from "@zocket/core";
+
+const authed = middleware()
+  .use(async ({ connectionId }) => {
+    // Look up the session/user for this connection
+    const user = await getUserByConnection(connectionId);
+    if (!user) throw new Error("Unauthorized");
+    return { userId: user.id, role: user.role };
+  });
+```
+
+## Using in Actors
+
+```ts
+const PrivateRoom = authed.actor({
+  state: z.object({
+    messages: z.array(z.object({
+      userId: z.string(),
+      text: z.string(),
+    })).default([]),
+  }),
+
+  methods: {
+    send: {
+      input: z.object({ text: z.string() }),
+      handler: ({ state, input, ctx }) => {
+        // ctx.userId is typed and guaranteed to exist
+        state.messages.push({ userId: ctx.userId, text: input.text });
+      },
+    },
+  },
+});
+```
+
+## Role-Based Access
+
+Chain middleware for role checks:
+
+```ts
+const adminOnly = authed
+  .use(({ ctx }) => {
+    if (ctx.role !== "admin") throw new Error("Forbidden");
+    return { isAdmin: true as const };
+  });
+
+const AdminPanel = adminOnly.actor({
+  state: z.object({ /* ... */ }),
+  methods: {
+    dangerousAction: {
+      handler: ({ ctx }) => {
+        // ctx.userId, ctx.role, ctx.isAdmin all available
+      },
+    },
+  },
+});
+```
+
+## JWT Verification Example
+
+```ts
+import { middleware } from "@zocket/core";
+import { verify } from "jsonwebtoken";
+
+// Store tokens per connection (e.g., set during an initial "auth" method call)
+const connectionTokens = new Map<string, string>();
+
+const jwtAuth = middleware()
+  .use(async ({ connectionId }) => {
+    const token = connectionTokens.get(connectionId);
+    if (!token) throw new Error("No token");
+
+    try {
+      const payload = verify(token, process.env.JWT_SECRET!) as {
+        sub: string;
+        role: string;
+      };
+      return { userId: payload.sub, role: payload.role };
+    } catch {
+      throw new Error("Invalid token");
+    }
+  });
+```
+
+## Client-Side Error Handling
+
+When middleware throws, the client's RPC promise rejects with the error message:
+
+```ts
+try {
+  await room.send({ text: "hello" });
+} catch (err) {
+  if (err.message === "Unauthorized") {
+    // Redirect to login
+  }
+}
+```
+
+## Actors Without Auth
+
+Actors created with the plain `actor()` function (not through middleware) have no authentication — all connections can call all methods. Use this for public actors like lobbies or status pages.

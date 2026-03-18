@@ -1,0 +1,17 @@
+---
+import { FAQ } from "../components/faq-section";
+---
+
+<section class="relative flex flex-col gap-7">
+  <header class="flex flex-col gap-2">
+    <h1>frequently asked <span class="text-teal-500">questions</span></h1>
+    <h3 class="max-w-lg">Everything you need to know about Zocket.</h3>
+  </header>
+  <div
+    class="absolute left-1/2 top-1/2 -z-10 h-full w-full -translate-x-1/2 -translate-y-1/2 bg-teal-500 opacity-[30%] blur-[200px] xl:opacity-[15%]"
+  >
+  </div>
+  <div class="flex flex-col xl:flex-row xl:gap-20">
+    <FAQ client:visible />
+  </div>
+</section>

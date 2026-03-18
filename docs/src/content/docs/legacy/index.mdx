@@ -1,0 +1,19 @@
+---
+title: Legacy Documentation (v1)
+description: Documentation for the original Zocket v1 router/procedure-based API.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+<Aside type="caution" title="Legacy API">
+  This section documents the **old v1 API** based on routers and procedures. The current version of Zocket uses an actor-based architecture. See [Getting Started](/getting-started/) for the new API.
+</Aside>
+
+These pages are preserved for reference. The v1 API used:
+
+- **Routers** with `.outgoing()` and `.incoming()` chains
+- **Procedures** via `zo.message.input(...).handle(...)`
+- **Room-based broadcasting** via `send.*.broadcast()` / `.toRoom()`
+- **Connection context** via `zocket.create({ headers, onConnect })`
+
+If you're starting a new project, use the v2 actor-based API instead.

@@ -1,14 +1,14 @@
 {
   "name": "@zocket/client",
   "version": "0.1.0",
-  "description": "Zocket WebSocket client for browsers",
+  "description": "Zocket v2 — typed client with proxy-based actor handles",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
     }
   },
   "scripts": {
@@ -17,20 +17,14 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@standard-schema/spec": "^1.0.0"
-  },
-  "peerDependencies": {
     "@zocket/core": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0"
+    "typescript": "^5.0.0"
   },
-  "files": [
-    "dist",
-    "LICENSE",
-    "README.md"
-  ],
+  "files": ["dist"],
+  "author": "Rahul Singh <ra.singh069@gmail.com>",
+  "license": "MIT",
   "publishConfig": {
     "access": "public"
   }

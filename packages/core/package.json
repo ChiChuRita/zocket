@@ -1,22 +1,22 @@
 {
   "name": "@zocket/core",
   "version": "0.1.0",
-  "description": "Type-safe WebSocket library similar to tRPC",
+  "description": "Zocket v2 — typed actor runtime core: definitions, types, protocol",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
     },
-    "./server": {
-      "types": "./dist/server/server.d.ts",
-      "import": "./dist/server/server.js"
+    "./protocol": {
+      "types": "./dist/protocol.d.mts",
+      "import": "./dist/protocol.mjs"
     },
-    "./adapters/bun": {
-      "types": "./dist/server/adapters/bun.d.ts",
-      "import": "./dist/server/adapters/bun.js"
+    "./types": {
+      "types": "./dist/types.d.mts",
+      "import": "./dist/types.mjs"
     }
   },
   "scripts": {
@@ -28,41 +28,12 @@
     "@standard-schema/spec": "^1.0.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@zocket/client": "workspace:*",
-    "bun-types": "latest",
     "typescript": "^5.0.0",
-    "valibot": "^1.1.0",
     "zod": "^4.1.12"
   },
-  "files": [
-    "dist",
-    "LICENSE",
-    "README.md"
-  ],
-  "keywords": [
-    "websocket",
-    "typescript",
-    "type-safe",
-    "real-time",
-    "trpc",
-    "ws",
-    "socket",
-    "validation",
-    "zod",
-    "valibot"
-  ],
+  "files": ["dist"],
   "author": "Rahul Singh <ra.singh069@gmail.com>",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ChiChuRita/zocket.git",
-    "directory": "packages/core"
-  },
-  "homepage": "https://github.com/ChiChuRita/zocket#readme",
-  "bugs": {
-    "url": "https://github.com/ChiChuRita/zocket/issues"
-  },
   "publishConfig": {
     "access": "public"
   }

@@ -1,0 +1,90 @@
+---
+title: React Setup
+description: Create typed hooks and providers for your Zocket app.
+---
+
+The `@zocket/react` package provides a factory that generates fully typed hooks and a context provider.
+
+## Installation
+
+```bash
+bun add @zocket/react @zocket/client @zocket/core
+```
+
+## Create Hooks
+
+Use `createZocketReact` to generate typed hooks from your app definition:
+
+```ts
+// src/zocket.ts
+import { createClient } from "@zocket/client";
+import { createZocketReact } from "@zocket/react";
+import type { app } from "../server/app";
+
+export const client = createClient<typeof app>({
+  url: "ws://localhost:3000",
+});
+
+export const {
+  ZocketProvider,
+  useClient,
+  useActor,
+  useEvent,
+  useActorState,
+} = createZocketReact<typeof app>();
+```
+
+## Add the Provider
+
+Wrap your app with `ZocketProvider`:
+
+```tsx
+// src/App.tsx
+import { ZocketProvider, client } from "./zocket";
+
+export function App() {
+  return (
+    <ZocketProvider client={client}>
+      <YourApp />
+    </ZocketProvider>
+  );
+}
+```
+
+The provider makes the client available to all hooks via React Context.
+
+## What You Get
+
+| Export            | Description                                     |
+| :---------------- | :---------------------------------------------- |
+| `ZocketProvider`  | Context provider — wrap your app with it         |
+| `useClient`       | Get the typed client from context                |
+| `useActor`        | Get a ref-counted actor handle                   |
+| `useEvent`        | Subscribe to actor events with auto-cleanup      |
+| `useActorState`   | Subscribe to actor state with optional selector  |
+
+All hooks are fully typed from your actor definitions — no manual type annotations needed.
+
+## Multiple Apps
+
+If you have multiple Zocket apps (e.g. different servers), create separate factories:
+
+```ts
+// game-zocket.ts
+export const { ZocketProvider: GameProvider, useActor: useGameActor } =
+  createZocketReact<typeof gameApp>();
+
+// chat-zocket.ts
+export const { ZocketProvider: ChatProvider, useActor: useChatActor } =
+  createZocketReact<typeof chatApp>();
+```
+
+Nest the providers in your app:
+
+```tsx
+<GameProvider client={gameClient}>
+  <ChatProvider client={chatClient}>
+    <App />
+  </ChatProvider>
+</GameProvider>
+```

@@ -1,20 +1,26 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ESNext",
     "module": "ESNext",
-    "lib": ["ES2020", "DOM"],
-    "jsx": "react",
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@zocket/core": ["../core/src/index.ts"],
+      "@zocket/core/*": ["../core/src/*"]
+    },
+    "jsx": "react-jsx",
     "declaration": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node",
     "resolveJsonModule": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist", "**/*.test.tsx", "**/*.test.ts"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

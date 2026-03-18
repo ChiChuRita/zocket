@@ -1,0 +1,127 @@
+---
+title: Middleware
+description: Chain middleware for authentication, logging, and context enrichment.
+---
+
+Middleware lets you run logic **before** every method handler on an actor. Use it for authentication, context enrichment, rate-limiting, or gating.
+
+## Creating Middleware
+
+```ts
+import { middleware } from "@zocket/core";
+
+const authed = middleware()
+  .use(async ({ connectionId }) => {
+    const user = await getUser(connectionId);
+    if (!user) throw new Error("Unauthorized");
+    return { userId: user.id, role: user.role };
+  });
+```
+
+Each `.use()` call receives the accumulated context and returns additional context. The types **intersect** — downstream middleware and handlers see all prior context.
+
+## Chaining
+
+```ts
+const admin = middleware()
+  .use(async ({ connectionId }) => {
+    const user = await getUser(connectionId);
+    if (!user) throw new Error("Unauthorized");
+    return { userId: user.id, role: user.role };
+  })
+  .use(({ ctx }) => {
+    if (ctx.role !== "admin") throw new Error("Forbidden");
+    return { isAdmin: true as const };
+  });
+```
+
+After this chain, handlers receive `ctx: { userId: string; role: string; isAdmin: true }`.
+
+## Attaching to Actors
+
+Use `.actor()` instead of the top-level `actor()` function:
+
+```ts
+const ProtectedRoom = authed.actor({
+  state: z.object({
+    messages: z.array(z.string()).default([]),
+  }),
+
+  methods: {
+    send: {
+      input: z.object({ text: z.string() }),
+      handler: ({ state, input, ctx }) => {
+        // ctx.userId is available and typed
+        state.messages.push(`${ctx.userId}: ${input.text}`);
+      },
+    },
+  },
+});
+```
+
+Actors created via `middleware().actor()` behave identically to `actor()` — they return the same `ActorDef` type and work with `createApp()`.
+
+## MiddlewareArgs
+
+Each middleware function receives:
+
+| Property       | Type     | Description                             |
+| :------------- | :------- | :-------------------------------------- |
+| `ctx`          | `TCtx`   | Accumulated context from prior middleware |
+| `connectionId` | `string` | Stable connection identifier             |
+| `actor`        | `string` | Actor name being called                  |
+| `actorId`      | `string` | Actor instance ID                        |
+| `method`       | `string` | Method name being called                 |
+
+## Error Handling
+
+If middleware throws, the RPC call is rejected and the method handler never runs. The error message is sent back to the client as part of the `rpc:result`:
+
+```ts
+.use(async ({ connectionId }) => {
+  const user = await verifyToken(connectionId);
+  if (!user) throw new Error("Unauthorized");
+  return { user };
+});
+```
+
+On the client:
+
+```ts
+try {
+  await room.send({ text: "hello" });
+} catch (err) {
+  console.error(err.message); // "Unauthorized"
+}
+```
+
+## Example: Auth + Logging
+
+```ts
+import { middleware } from "@zocket/core";
+
+const withAuth = middleware()
+  .use(async ({ connectionId }) => {
+    const session = await verifySession(connectionId);
+    if (!session) throw new Error("Unauthorized");
+    return { userId: session.userId };
+  });
+
+const withLogging = withAuth
+  .use(({ ctx, actor, actorId, method }) => {
+    console.log(`[${ctx.userId}] ${actor}/${actorId}.${method}()`);
+    return {};
+  });
+
+// Use in actor definition
+const MyActor = withLogging.actor({
+  state: z.object({ /* ... */ }),
+  methods: {
+    doSomething: {
+      handler: ({ ctx }) => {
+        // ctx.userId is available
+      },
+    },
+  },
+});
+```

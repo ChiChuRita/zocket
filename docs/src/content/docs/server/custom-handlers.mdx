@@ -1,0 +1,96 @@
+---
+title: Custom Handlers
+description: Build custom server adapters with createHandlers().
+---
+
+If you're not using Bun, or need full control over the WebSocket lifecycle, you can use `createHandlers()` to get runtime-agnostic callbacks.
+
+## createHandlers
+
+```ts
+import { createHandlers } from "@zocket/server";
+import { app } from "./app";
+
+const handlers = createHandlers(app);
+```
+
+This returns a `HandlerCallbacks` object:
+
+```ts
+interface HandlerCallbacks {
+  onConnection(conn: Connection): void;
+  onMessage(conn: Connection, raw: string): void;
+  onClose(conn: Connection): void;
+}
+```
+
+## Connection Interface
+
+Your adapter must provide objects that implement `Connection`:
+
+```ts
+interface Connection {
+  send(message: string): void;
+  id: string; // Stable identifier for lifecycle hooks
+}
+```
+
+The `id` must be unique per connection and stable for its lifetime.
+
+## Wiring to a Custom Runtime
+
+Here's a sketch for wiring to a generic WebSocket server:
+
+```ts
+import { createHandlers } from "@zocket/server";
+import { app } from "./app";
+
+const handlers = createHandlers(app);
+let connId = 0;
+
+myWebSocketServer.on("connection", (ws) => {
+  const conn = {
+    id: `custom_${++connId}`,
+    send: (msg: string) => ws.send(msg),
+  };
+
+  handlers.onConnection(conn);
+
+  ws.on("message", (data: string) => {
+    handlers.onMessage(conn, data);
+  });
+
+  ws.on("close", () => {
+    handlers.onClose(conn);
+  });
+});
+```
+
+## Message Routing
+
+The handler routes messages based on their `type` field:
+
+| Message Type   | Action                                       |
+| :------------- | :------------------------------------------- |
+| `rpc`          | Invoke method, send `rpc:result` back        |
+| `event:sub`    | Subscribe connection to actor events          |
+| `event:unsub`  | Unsubscribe from events                       |
+| `state:sub`    | Subscribe to state + send initial snapshot    |
+| `state:unsub`  | Unsubscribe from state patches                |
+
+## ActorManager
+
+Behind `createHandlers`, an `ActorManager` owns all actor instances:
+
+- `getOrCreate(actorName, actorId)` — lazily creates actor instances with schema-initialized state
+- `removeConnection(conn)` — broadcasts disconnection to all actor instances the connection interacted with
+
+Actor instances are stored in a `Map<"actorName:actorId", ActorInstance>`.
+
+## State Initialization
+
+When an actor instance is first created, the manager initializes state by:
+
+1. Validating `{}` against the state schema (works with schemas that have defaults)
+2. If that fails, validating `undefined` (works with top-level `.default()`)
+3. If both fail, using `{}` as a fallback

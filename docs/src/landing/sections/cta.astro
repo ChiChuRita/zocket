@@ -1,0 +1,59 @@
+---
+import { Button } from "../components/ui/button";
+---
+
+<section class="relative flex flex-col gap-7">
+  <div
+    class="absolute left-1/2 top-1/2 -z-10 h-full w-full -translate-x-1/2 -translate-y-1/2 bg-primary opacity-[10%] blur-[200px]"
+  >
+  </div>
+  <header class="flex flex-col gap-2">
+    <h1>ready to <span class="text-primary">build</span>?</h1>
+    <h3 class="max-w-lg">
+      Get started with Zocket in minutes. Define your first actor, connect a
+      client, and ship realtime features with full type safety.
+    </h3>
+  </header>
+  <div class="flex flex-col gap-4 xl:flex-row xl:gap-6">
+    <div class="ctn flex flex-col gap-5 rounded-xl p-4 xl:p-8">
+      <h2>1. Install</h2>
+      <code class="rounded-md bg-black/50 px-4 py-2 font-mono text-primary">
+        bun add @zocket/core @zocket/server @zocket/client zod
+      </code>
+    </div>
+    <div class="ctn flex flex-col gap-5 rounded-xl p-4 xl:p-8">
+      <h2>2. Define Actors</h2>
+      <p class="max-w-md">
+        Create typed actors with state schemas, methods, events, and lifecycle
+        hooks — all validated by Zod.
+      </p>
+    </div>
+    <div class="ctn flex flex-col gap-5 rounded-xl p-4 xl:p-8">
+      <h2>3. Ship It</h2>
+      <p class="max-w-md">
+        Connect clients with full type inference. Use React hooks for
+        selector-based state subscriptions.
+      </p>
+    </div>
+  </div>
+  <div class="flex flex-row gap-4 pt-4">
+    <a href="/getting-started/">
+      <Button
+        className="xl:text-lg px-6 xl:px-10"
+        size="lg"
+      >
+        Read the Docs
+      </Button>
+    </a>
+    <a href="https://github.com/ChiChuRita/zocket">
+      <Button
+        variant="secondary"
+        className="xl:text-lg px-6 xl:px-10 flex gap-3"
+        size="lg"
+      >
+        <img src="/github-mark-white.svg" class="w-5" alt="GitHub" />
+        View Source
+      </Button>
+    </a>
+  </div>
+</section>

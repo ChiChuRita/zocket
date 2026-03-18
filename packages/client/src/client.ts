@@ -1,316 +1,515 @@
-import type { AnyRouter } from "@zocket/core";
-import type { ZocketClient } from "./types";
+import type {
+  AppDef,
+  ClientApi,
+  RpcCallMessage,
+  RpcResultMessage,
+  ServerMessage,
+  EventMessage,
+  StateSnapshotMessage,
+  StatePatchMessage,
+} from "@zocket/core/types";
+import { parseMessage, MSG } from "@zocket/core/protocol";
+import { ActorHandleImpl } from "./actor-handle";
 
-type MessageCallback = (payload: unknown) => void;
+// ---------------------------------------------------------------------------
+// Client options
+// ---------------------------------------------------------------------------
 
-type Message = {
-  type: string;
-  payload: unknown;
-  rpcId?: string;
-};
-
-const RPC_RES_TYPE = "__rpc_res";
-const ZOCKET_VERSION = "0.1.0";
-
-const DEFAULT_OPTIONS = {
-  debug: false,
-} as const;
-
-function isValidMessage(data: unknown): data is Message {
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    "type" in data &&
-    typeof (data as any).type === "string"
-  );
+export interface ClientOptions {
+  /** WebSocket URL for the Zocket server (e.g., "ws://localhost:3000"). */
+  url: string;
+  /**
+   * Total timeout in ms for an RPC, including time spent waiting for a live
+   * socket before the request can be sent. 0 = no timeout. Default: 10000.
+   */
+  rpcTimeout?: number;
+  /** Reject `$ready` if the initial connection is not established in time. */
+  connectTimeout?: number;
+  /** Automatically reconnect after unexpected socket closes. Default: true. */
+  reconnect?: boolean;
+  /** Override reconnect delay in ms. Useful for deterministic tests. */
+  reconnectDelayMs?: number;
 }
 
-export function createZocketClient<TRouter extends AnyRouter>(
-  url: string,
-  options?: {
-    debug?: boolean;
-    headers?: Record<string, string>;
-    onOpen?: () => void;
-    onClose?: () => void;
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+interface PendingRpc {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  timer?: ReturnType<typeof setTimeout>;
+}
+
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve(value: T): void;
+  reject(error: Error): void;
+  settled: boolean;
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolveFn!: (value: T) => void;
+  let rejectFn!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolve, reject) => {
+    resolveFn = resolve;
+    rejectFn = reject;
+  });
+  // Deferreds are internally rejected during reconnect / shutdown cycles.
+  // Attach a no-op handler so these internal transitions do not surface as
+  // unhandled rejections when nobody is currently awaiting them.
+  void promise.catch(() => {});
+  const deferred: Deferred<T> = {
+    promise,
+    resolve(value: T) {
+      if (deferred.settled) return;
+      deferred.settled = true;
+      resolveFn(value);
+    },
+    reject(error: Error) {
+      if (deferred.settled) return;
+      deferred.settled = true;
+      rejectFn(error);
+    },
+    settled: false,
+  };
+  return deferred;
+}
+
+function normalizeDisconnectError(reason?: string): Error {
+  return new Error(reason ?? "WebSocket closed");
+}
+
+// ---------------------------------------------------------------------------
+// Connection status
+// ---------------------------------------------------------------------------
+
+export type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "disconnected";
+
+export type ClientEvent = "status";
+export type ClientEventCallback<E extends ClientEvent> =
+  E extends "status" ? (status: ConnectionStatus) => void : never;
+
+type Unsubscribe = () => void;
+
+export interface ClientConnection {
+  readonly ready: Promise<void>;
+  readonly status: ConnectionStatus;
+  subscribe(cb: (status: ConnectionStatus) => void): Unsubscribe;
+  close(): void;
+}
+
+// ---------------------------------------------------------------------------
+// createClient
+// ---------------------------------------------------------------------------
+
+export function createClient<TApp extends AppDef<any>>(
+  options: ClientOptions,
+): ClientApi<TApp> & {
+  connection: ClientConnection;
+  $close(): void;
+  $ready: Promise<void>;
+  $status: ConnectionStatus;
+  on<E extends ClientEvent>(event: E, cb: ClientEventCallback<E>): Unsubscribe;
+} {
+  const wsUrl = options.url;
+  const rpcTimeout = options.rpcTimeout ?? 10_000;
+  const connectTimeout = options.connectTimeout ?? 10_000;
+  const shouldReconnect = options.reconnect ?? true;
+  const reconnectDelayMs = options.reconnectDelayMs;
+
+  let ws: WebSocket | null = null;
+  let connected = false;
+  let wasClosedByUser = false;
+  let hasOpenedOnce = false;
+  let reconnectAttempt = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let connectionEpoch = 0;
+  let currentOpenWait = createDeferred<void>();
+
+  let resolveReady!: () => void;
+  let rejectReady!: (error: Error) => void;
+  let readySettled = false;
+  const readyPromise = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+
+  const handles = new Map<string, ActorHandleImpl>();
+  const disposeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const pendingRpcs = new Map<string, PendingRpc>();
+
+  // -- Connection status -----------------------------------------------------
+  let currentStatus: ConnectionStatus = "connecting";
+  const statusListeners = new Set<(status: ConnectionStatus) => void>();
+
+  function setStatus(next: ConnectionStatus): void {
+    if (next === currentStatus) return;
+    currentStatus = next;
+    for (const cb of statusListeners) cb(next);
   }
-): ZocketClient<TRouter> {
-  const debug = options?.debug ?? DEFAULT_OPTIONS.debug;
-  const eventListeners = new Map<string, Set<MessageCallback>>();
-  const openListeners = new Set<() => void>();
-  const closeListeners = new Set<() => void>();
-  const errorListeners = new Set<(error: unknown) => void>();
-  const pendingRpcs = new Map<
-    string,
-    { resolve: (val: any) => void; reject: (err: any) => void; timer: any }
-  >();
-  let lastError: unknown | null = null;
 
-  const WebSocketImpl = globalThis.WebSocket;
-
-  if (!WebSocketImpl) {
-    throw new Error(
-      "WebSocket is not available in the current environment. " +
-        "Make sure to run the client in a browser or provide a WebSocket implementation."
-    );
-  }
-
-  const log = (...args: unknown[]) => debug && console.log("CLIENT:", ...args);
-  const warn = (...args: unknown[]) =>
-    debug && console.warn("CLIENT:", ...args);
-  const error = (...args: unknown[]) => console.error("CLIENT:", ...args);
-
-  const wsUrl = new URL(url);
-  wsUrl.searchParams.set("x-zocket-version", ZOCKET_VERSION);
-  if (options?.headers) {
-    Object.entries(options.headers).forEach(([key, value]) => {
-      wsUrl.searchParams.set(key, value);
-    });
-  }
-  let socket: WebSocket | null = null;
-
-  const decodeMessageData = (event: MessageEvent): string | null => {
-    if (typeof event.data === "string") {
-      return event.data;
-    }
-
-    if (event.data instanceof ArrayBuffer) {
-      return new TextDecoder().decode(event.data);
-    }
-
-    warn("Unsupported message data type received:", event.data);
-    return null;
+  const settleReady = {
+    resolve() {
+      if (readySettled) return;
+      readySettled = true;
+      if (readyTimeout) clearTimeout(readyTimeout);
+      resolveReady();
+    },
+    reject(error: Error) {
+      if (readySettled) return;
+      readySettled = true;
+      if (readyTimeout) clearTimeout(readyTimeout);
+      rejectReady(error);
+    },
   };
 
-  const attachSocket = () => {
-    // Starting a new connection attempt: clear previous error.
-    lastError = null;
-    const ws = new WebSocketImpl(wsUrl.toString());
-    socket = ws;
-    ws.binaryType = "arraybuffer";
+  const readyTimeout =
+    connectTimeout > 0
+      ? setTimeout(() => {
+          settleReady.reject(
+            new Error(`WebSocket did not connect within ${connectTimeout}ms`),
+          );
+        }, connectTimeout)
+      : null;
 
-    ws.addEventListener("open", () => {
-      if (socket !== ws) {
-        // Another socket became active before this one opened.
-        return;
+  function createReconnectDelay(attempt: number): number {
+    if (reconnectDelayMs !== undefined) return reconnectDelayMs;
+    const base = Math.min(250 * 2 ** Math.max(0, attempt - 1), 2_000);
+    const jitter = Math.floor(Math.random() * 100);
+    return base + jitter;
+  }
+
+  function clearReconnectTimer(): void {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+  }
+
+  function wsSend(raw: string): void {
+    if (!connected || !ws) return;
+    try {
+      ws.send(raw);
+    } catch {
+      // Ignore transient send failures; close handling will reconcile state.
+    }
+  }
+
+  function syncActiveSubscriptions(): void {
+    for (const handle of handles.values()) {
+      handle.syncSubscriptions(wsSend);
+    }
+  }
+
+  function rejectAllPendingRpcs(reason?: string): void {
+    const error = normalizeDisconnectError(reason);
+    for (const entry of pendingRpcs.values()) {
+      if (entry.timer) clearTimeout(entry.timer);
+      entry.reject(error);
+    }
+    pendingRpcs.clear();
+  }
+
+  async function waitForOpen(timeoutMs: number): Promise<void> {
+    if (connected && ws) return;
+    if (wasClosedByUser) {
+      throw new Error("WebSocket client is closed");
+    }
+
+    if (timeoutMs <= 0) {
+      await currentOpenWait.promise;
+      return;
+    }
+
+    await Promise.race([
+      currentOpenWait.promise,
+      new Promise<never>((_, reject) => {
+        const timer = setTimeout(() => {
+          clearTimeout(timer);
+          reject(new Error(`WebSocket was not ready within ${timeoutMs}ms`));
+        }, timeoutMs);
+        currentOpenWait.promise.finally(() => clearTimeout(timer)).catch(() => {});
+      }),
+    ]);
+  }
+
+  function scheduleReconnect(): void {
+    if (!shouldReconnect || wasClosedByUser || reconnectTimer) return;
+    const delay = createReconnectDelay(++reconnectAttempt);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  }
+
+  function handleSocketClosed(socket: WebSocket, reason?: string): void {
+    if (socket !== ws) return;
+
+    connected = false;
+    ws = null;
+    rejectAllPendingRpcs(reason);
+
+    if (wasClosedByUser) {
+      setStatus("disconnected");
+      currentOpenWait.reject(normalizeDisconnectError(reason ?? "WebSocket client is closed"));
+      settleReady.reject(new Error("WebSocket client closed before becoming ready"));
+      return;
+    }
+
+    if (hasOpenedOnce) {
+      currentOpenWait = createDeferred<void>();
+      setStatus("reconnecting");
+    }
+
+    scheduleReconnect();
+  }
+
+  function connect(): void {
+    if (wasClosedByUser) return;
+
+    const socket = new WebSocket(wsUrl);
+    const epoch = ++connectionEpoch;
+    ws = socket;
+
+    socket.onopen = () => {
+      if (socket !== ws || epoch !== connectionEpoch) return;
+
+      connected = true;
+      reconnectAttempt = 0;
+      clearReconnectTimer();
+      hasOpenedOnce = true;
+      setStatus("connected");
+      currentOpenWait.resolve();
+      settleReady.resolve();
+      syncActiveSubscriptions();
+    };
+
+    socket.onmessage = (event: MessageEvent) => {
+      if (socket !== ws || epoch !== connectionEpoch) return;
+
+      const msg = parseMessage(
+        typeof event.data === "string" ? event.data : event.data.toString(),
+      ) as ServerMessage | null;
+      if (!msg) return;
+
+      switch (msg.type) {
+        case MSG.RPC_RESULT: {
+          const rpcMsg = msg as RpcResultMessage;
+          const entry = pendingRpcs.get(rpcMsg.id);
+          if (!entry) break;
+
+          pendingRpcs.delete(rpcMsg.id);
+          if (entry.timer) clearTimeout(entry.timer);
+          if (rpcMsg.error) {
+            entry.reject(new Error(rpcMsg.error));
+          } else {
+            entry.resolve(rpcMsg.result);
+          }
+          break;
+        }
+        case MSG.EVENT: {
+          const evtMsg = msg as EventMessage;
+          const key = `${evtMsg.actor}:${evtMsg.actorId}`;
+          handles.get(key)?.handleMessage(msg);
+          break;
+        }
+        case MSG.STATE_SNAPSHOT: {
+          const snapMsg = msg as StateSnapshotMessage;
+          const key = `${snapMsg.actor}:${snapMsg.actorId}`;
+          handles.get(key)?.handleMessage(msg);
+          break;
+        }
+        case MSG.STATE_PATCH: {
+          const patchMsg = msg as StatePatchMessage;
+          const key = `${patchMsg.actor}:${patchMsg.actorId}`;
+          handles.get(key)?.handleMessage(msg);
+          break;
+        }
       }
-      log("Connected");
-      lastError = null;
-      options?.onOpen?.();
-      openListeners.forEach((cb) => cb());
-    });
+    };
 
-    ws.addEventListener("close", () => {
-      if (socket === ws) {
-        socket = null;
+    socket.onclose = (event: CloseEvent) => {
+      if (socket !== ws || epoch !== connectionEpoch) return;
+      handleSocketClosed(socket, event.reason || "WebSocket closed");
+    };
+
+    socket.onerror = () => {
+      if (socket !== ws || epoch !== connectionEpoch) return;
+      connected = false;
+    };
+  }
+
+  async function rpcSend(msg: RpcCallMessage): Promise<unknown> {
+    const startedAt = Date.now();
+    await waitForOpen(rpcTimeout);
+
+    const socket = ws;
+    if (!connected || !socket) {
+      throw new Error("WebSocket is not connected");
+    }
+
+    return new Promise((resolve, reject) => {
+      const elapsed = Date.now() - startedAt;
+      const remaining = rpcTimeout > 0 ? Math.max(0, rpcTimeout - elapsed) : 0;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      if (rpcTimeout > 0) {
+        if (remaining === 0) {
+          reject(new Error(`RPC "${msg.method}" timed out after ${rpcTimeout}ms`));
+          return;
+        }
+        timer = setTimeout(() => {
+          pendingRpcs.delete(msg.id);
+          reject(new Error(`RPC "${msg.method}" timed out after ${rpcTimeout}ms`));
+        }, remaining);
       }
-      log("Disconnected");
-      options?.onClose?.();
-      closeListeners.forEach((cb) => cb());
-    });
 
-    ws.addEventListener("error", (err) => {
-      if (socket !== ws) {
-        return;
-      }
-      lastError = err;
-      error("WebSocket error:", err);
-      errorListeners.forEach((cb) => cb(err));
-    });
-
-    ws.addEventListener("message", (event) => {
-      if (socket !== ws) {
-        return;
-      }
-
-      const raw = decodeMessageData(event);
-
-      if (raw === null) {
-        return;
-      }
+      pendingRpcs.set(msg.id, { resolve, reject, timer });
 
       try {
-        const data: unknown = JSON.parse(raw);
-
-        if (!isValidMessage(data)) {
-          warn("Invalid message format received:", data);
-          return;
-        }
-
-        const { type, payload, rpcId } = data as Message;
-
-        if (type === RPC_RES_TYPE && rpcId) {
-          const pending = pendingRpcs.get(rpcId);
-          if (pending) {
-            clearTimeout(pending.timer);
-            pendingRpcs.delete(rpcId);
-            pending.resolve(payload);
-          }
-          return;
-        }
-
-        const listeners = eventListeners.get(type);
-        listeners?.forEach((callback) => callback(payload));
-      } catch (e) {
-        error("Failed to parse message:", e);
+        socket.send(JSON.stringify(msg));
+      } catch {
+        pendingRpcs.delete(msg.id);
+        if (timer) clearTimeout(timer);
+        reject(new Error(`RPC "${msg.method}" could not be sent`));
       }
     });
-  };
+  }
 
-  attachSocket();
+  connect();
 
-  const sendMessage = (route: string, payload: unknown, rpcId?: string) => {
-    const message = JSON.stringify({ type: route, payload, rpcId });
-
-    if (!socket) {
-      warn(
-        `WebSocket not initialized. Message dropped for "${route}" with payload:`,
-        payload
-      );
-      return;
+  function getOrCreateHandle(actorName: string, actorId: string): ActorHandleImpl {
+    const key = `${actorName}:${actorId}`;
+    const pendingDispose = disposeTimers.get(key);
+    if (pendingDispose !== undefined) {
+      clearTimeout(pendingDispose);
+      disposeTimers.delete(key);
     }
 
-    if (socket.readyState !== WebSocketImpl.OPEN) {
-      warn(
-        `WebSocket not open (state: ${socket.readyState}). Message dropped for "${route}"`
-      );
-      return;
-    }
-
-    socket.send(message);
-  };
-
-  const subscribeToEvent = (route: string, callback: MessageCallback) => {
-    if (!eventListeners.has(route)) {
-      eventListeners.set(route, new Set());
-    }
-    const listeners = eventListeners.get(route)!;
-    listeners.add(callback);
-    return () => listeners.delete(callback);
-  };
-
-  /**
-   * IMPORTANT FOR REACT:
-   * We cache proxy chains so expressions like `client.on.chat.onMessage`
-   * have stable identity across renders (avoids unnecessary resubscribe loops).
-   */
-  const proxyCache = new Map<string, any>();
-
-  const createProxy = (path: string[], isListener: boolean): any => {
-    const mode = isListener ? "on" : "call";
-    const key = `${mode}.${path.join(".")}`;
-    const cached = proxyCache.get(key);
-    if (cached) return cached;
-
-    const proxy = new Proxy(() => {}, {
-      get: (target, prop: string | symbol, receiver) => {
-        if (prop === "then") return undefined;
-        if (typeof prop !== "string") {
-          return Reflect.get(target, prop, receiver);
-        }
-
-        return createProxy([...path, prop], isListener);
-      },
-      apply: (_target, _thisArg, args) => {
-        const [arg0] = args;
-        const route = path.join(".");
-
-        if (isListener) {
-          return subscribeToEvent(route, arg0);
-        }
-
-        // RPC / Unified API
-        const rpcId = Math.random().toString(36).substring(2, 15);
-
-        return new Promise((resolve, reject) => {
-          const timer = setTimeout(() => {
-            if (pendingRpcs.has(rpcId)) {
-              pendingRpcs.delete(rpcId);
-              reject(new Error(`RPC timeout for route: ${route}`));
-            }
-          }, 10000); // 10s default timeout
-
-          pendingRpcs.set(rpcId, { resolve, reject, timer });
-          sendMessage(route, arg0, rpcId);
-        });
-      },
-    });
-
-    proxyCache.set(key, proxy);
-    return proxy;
-  };
-
-  const callProxy = createProxy([], false);
-  const onProxy = createProxy([], true);
-
-  const baseClient = {
-    on: onProxy,
-    onOpen: (callback: () => void) => {
-      openListeners.add(callback);
-      return () => openListeners.delete(callback);
-    },
-    onClose: (callback: () => void) => {
-      closeListeners.add(callback);
-      return () => closeListeners.delete(callback);
-    },
-    onError: (callback: (error: unknown) => void) => {
-      errorListeners.add(callback);
-      return () => errorListeners.delete(callback);
-    },
-    close: () => {
-      if (!socket) {
-        return;
+    let handle = handles.get(key);
+    if (!handle) {
+      handle = new ActorHandleImpl(actorName, actorId, wsSend, rpcSend);
+      handles.set(key, handle);
+      if (connected) {
+        handle.syncSubscriptions(wsSend);
       }
+    }
 
+    handle.retain();
+    return handle;
+  }
+
+  function releaseHandle(actorName: string, actorId: string): void {
+    const key = `${actorName}:${actorId}`;
+    const handle = handles.get(key);
+    if (!handle) return;
+
+    if (handle.release() === 0) {
+      const timer = setTimeout(() => {
+        disposeTimers.delete(key);
+        if (handle.refCount !== 0) return;
+        if (handles.get(key) !== handle) return;
+        handle.dispose();
+        handles.delete(key);
+      }, 0);
+      disposeTimers.set(key, timer);
+    }
+  }
+
+  const closeClient = (): void => {
+    wasClosedByUser = true;
+    clearReconnectTimer();
+
+    for (const timer of disposeTimers.values()) clearTimeout(timer);
+    disposeTimers.clear();
+
+    for (const handle of handles.values()) handle.dispose();
+    handles.clear();
+
+    rejectAllPendingRpcs("WebSocket client closed");
+
+    const socket = ws;
+    ws = null;
+    connected = false;
+    setStatus("disconnected");
+    currentOpenWait.reject(new Error("WebSocket client closed"));
+    settleReady.reject(new Error("WebSocket client closed before becoming ready"));
+
+    if (socket) {
       try {
         socket.close();
-      } catch (e) {
-        error("Failed to close socket:", e);
+      } catch {
+        // ignore
       }
-    },
-    reconnect: () => {
-      if (!socket || socket.readyState === WebSocketImpl.CLOSED) {
-        attachSocket();
-        return;
-      }
+    }
+  };
 
-      const currentSocket = socket;
-      const reconnectAfterClose = () => {
-        currentSocket.removeEventListener("close", reconnectAfterClose);
-        if (socket === currentSocket) {
-          socket = null;
-        }
-        attachSocket();
+  const connectionApi: ClientConnection = {
+    get ready() {
+      return readyPromise;
+    },
+    get status() {
+      return currentStatus;
+    },
+    subscribe(cb) {
+      statusListeners.add(cb);
+      return () => {
+        statusListeners.delete(cb);
       };
-
-      currentSocket.addEventListener("close", reconnectAfterClose, {
-        once: true,
-      });
-
-      try {
-        currentSocket.close();
-      } catch (e) {
-        error("Failed to close socket before reconnect:", e);
-        currentSocket.removeEventListener("close", reconnectAfterClose);
-        attachSocket();
-      }
     },
-    get readyState() {
-      return socket?.readyState ?? WebSocketImpl.CLOSED;
-    },
-    get lastError() {
-      return lastError;
+    close() {
+      closeClient();
     },
   };
 
-  return new Proxy(baseClient, {
-    get: (target, prop: string | symbol, receiver) => {
-      if (prop in target) {
-        return Reflect.get(target, prop, receiver);
+  const proxy = new Proxy({} as any, {
+    get(_target, prop: string) {
+      if (prop === "connection") return connectionApi;
+      if (prop === "$close") {
+        return closeClient;
       }
-      if (typeof prop === "string") {
-        return callProxy[prop];
+
+      if (prop === "$ready") return readyPromise;
+      if (prop === "$status") return currentStatus;
+
+      if (prop === "on") {
+        return (event: string, cb: (payload: any) => void): Unsubscribe => {
+          if (event === "status") {
+            statusListeners.add(cb);
+            return () => { statusListeners.delete(cb); };
+          }
+          return () => {};
+        };
       }
-      return Reflect.get(target, prop, receiver);
+
+      return (actorId: string) => {
+        const impl = getOrCreateHandle(prop, actorId);
+
+        return new Proxy({} as any, {
+          get(_t, methodOrProp: string) {
+            if (methodOrProp === "on") {
+              return (event: string, cb: (payload: unknown) => void) =>
+                impl.on(event, cb);
+            }
+            if (methodOrProp === "state") return impl.state;
+            if (methodOrProp === "meta") {
+              return {
+                name: impl.actorName,
+                id: impl.actorId,
+                dispose: () => releaseHandle(prop, actorId),
+              };
+            }
+            if (methodOrProp === "$actorName") return impl.actorName;
+            if (methodOrProp === "$actorId") return impl.actorId;
+            if (methodOrProp === "$dispose") return () => releaseHandle(prop, actorId);
+
+            return (input?: unknown) => impl.call(methodOrProp, input);
+          },
+        });
+      };
     },
-  }) as any as ZocketClient<TRouter>;
+  });
+
+  return proxy;
 }

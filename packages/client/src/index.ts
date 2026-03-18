@@ -1,3 +1,2 @@
-export { createZocketClient } from "./client";
-export type { ZocketClient } from "./types";
-export type { AnyRouter } from "@zocket/core";
+export { createClient } from "./client";
+export type { ClientOptions, ConnectionStatus, ClientConnection } from "./client";

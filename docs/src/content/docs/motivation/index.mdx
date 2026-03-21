@@ -1,0 +1,41 @@
+---
+title: Motivation
+description: Why Zocket is shaped the way it is.
+sidebar:
+  order: 1
+---
+
+Zocket is opinionated on purpose.
+
+It does not try to be a thin WebSocket wrapper or a generic event bus. It assumes that most realtime applications are built from long-lived, stateful things like rooms, matches, documents, boards, and presence channels, and it gives those things a first-class shape.
+
+This section explains the thinking behind that design.
+
+## Read This Section If You Want To Understand...
+
+- why Zocket is not just `socket.on("event")` with better TypeScript
+- why state sync is built in instead of left to app code
+- why the core abstraction is an actor instead of a flat message router
+- what kinds of realtime systems Zocket is actually optimized for
+
+## Start Here
+
+- [Philosophy](/motivation/philosophy/) explains the broader design goals behind Zocket.
+- [Why Actors](/motivation/actors/) explains why actors are the core unit in the library.
+- [Why The Type Safety Is Better](/motivation/type-safety/) explains why inferred, validated types are stronger than shared `types.ts` files.
+- [Comparison](/comparison/) shows where Zocket fits relative to Socket.io, PartyKit, Convex, Liveblocks, and others.
+
+## The Short Version
+
+Zocket is built around a simple belief:
+
+Realtime applications are usually collections of isolated stateful things, not a flat stream of unrelated socket messages.
+
+Once you accept that, a lot of the API shape follows naturally:
+
+- define server logic around those stateful things
+- infer the client API from the server definition
+- make state sync automatic instead of ad hoc
+- process changes sequentially per instance so race conditions stay local
+
+That is the core idea behind the rest of the docs.

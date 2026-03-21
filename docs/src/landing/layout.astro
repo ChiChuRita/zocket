@@ -20,13 +20,11 @@ import Footer from "./components/footer.astro";
     <meta property="og:description" content="Typed actor runtime for realtime applications" />
     <title>Zocket</title>
   </head>
-  <body class="flex flex-col justify-between font-sans">
+  <body class="flex min-h-screen flex-col font-sans">
     <Navbar />
-    <div class="flex flex-col justify-center gap-20 p-6 xl:container">
+    <div class="mx-auto w-full max-w-[1200px] flex-1 px-6">
       <slot />
     </div>
-    <div class="p-6">
-      <Footer />
-    </div>
+    <Footer />
   </body>
 </html>

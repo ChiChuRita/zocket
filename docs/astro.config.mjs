@@ -1,17 +1,51 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import starlightThemeNext from "starlight-theme-next";
+import starlightLlmsTxt from "starlight-llms-txt";
 import react from "@astrojs/react";
 import tailwind from "@astrojs/tailwind";
 
 export default defineConfig({
+  site: "https://zocket-docs.pages.dev",
   integrations: [
     starlight({
-      plugins: [starlightThemeNext()],
+      plugins: [
+        starlightThemeNext(),
+        starlightLlmsTxt({
+          details:
+            "Use these docs as the primary source for Zocket's current API and design. Prefer the main docs over the legacy v1 section unless the user explicitly asks about the old API.\n\nRecommended reading order:\n- Start with Motivation and Getting Started for the mental model\n- Use Core, Client, and React docs for API details\n- Use Guides for concrete implementation patterns",
+          customSets: [
+            {
+              label: "Motivation and Overview",
+              description: "Conceptual pages explaining the mental model, actor design, and type-safety story.",
+              paths: ["getting-started", "motivation/**", "comparison"],
+            },
+            {
+              label: "Core API",
+              description: "Actor, app, middleware, protocol, and type system reference pages.",
+              paths: ["core/**"],
+            },
+            {
+              label: "Client and React",
+              description: "Client handles, connection lifecycle, state subscriptions, and React bindings.",
+              paths: ["client/**", "react/**"],
+            },
+            {
+              label: "Guides",
+              description: "Worked examples and implementation patterns.",
+              paths: ["guides/**"],
+            },
+          ],
+          exclude: ["legacy/**"],
+        }),
+      ],
       expressiveCode: {
         themes: ["github-dark"],
       },
       title: "Zocket",
+      logo: {
+        src: "./src/assets/logo.svg",
+      },
       description:
         "Typed actor runtime for realtime applications. Define actors, call methods, subscribe to state — all end-to-end type-safe.",
       social: [
@@ -30,7 +64,12 @@ export default defineConfig({
         },
         {
           label: "Motivation",
-          slug: "motivation",
+          items: [
+            { label: "Overview", slug: "motivation" },
+            { label: "Philosophy", slug: "motivation/philosophy" },
+            { label: "Why Actors", slug: "motivation/actors" },
+            { label: "Why The Type Safety Is Better", slug: "motivation/type-safety" },
+          ],
         },
         {
           label: "Comparison",
@@ -77,6 +116,14 @@ export default defineConfig({
             { label: "State Management", slug: "guides/state-management" },
             { label: "Multiplayer Draw", slug: "guides/multiplayer-draw" },
           ],
+        },
+        {
+          label: "LLM Docs",
+          link: "/llms-full.txt",
+          attrs: {
+            target: "_blank",
+            rel: "noopener noreferrer",
+          },
         },
         {
           label: "Legacy (v1)",

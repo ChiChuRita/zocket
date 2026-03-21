@@ -53,8 +53,15 @@ html {
   border-color: var(--sl-color-asides-border);
 }
 
+/* Don't bold active sidebar items */
+[aria-current="page"],
+[aria-current="page"] a {
+  font-weight: normal !important;
+}
+
 /* Inline code — match code block tone */
 .sl-markdown-content :not(pre) > code {
   background-color: #161616;
   border: 1px solid var(--sl-color-gray-5);
 }
+

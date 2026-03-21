@@ -1,0 +1,505 @@
+---
+title: Why The Type Safety Is Better
+description: Why inferred, validated types are stronger than manually maintained shared type files.
+sidebar:
+  order: 3
+---
+
+Many realtime tools can be made "type-safe" if you are disciplined enough.
+
+You can create a shared `types.ts` file, export interfaces, and make sure both server and client import them.
+
+That is better than plain `any`.
+
+But it is still not the same thing as Zocket's type safety.
+
+The difference is this:
+
+- explicit type files describe what you hope the system does
+- Zocket's types are derived from what the system actually does
+
+That sounds subtle, but it changes a lot in practice.
+
+## The Easy Example
+
+Imagine a chat room with:
+
+- state: a list of messages
+- one method: `sendMessage`
+- one event: `newMessage`
+
+### The explicit type file approach
+
+You might start with a shared file like this:
+
+```ts
+// types.ts
+export type Message = {
+  from: string;
+  text: string;
+};
+
+export interface ChatEvents {
+  newMessage: Message;
+}
+
+export interface ChatMethods {
+  sendMessage: { text: string };
+}
+
+export interface ChatState {
+  messages: Message[];
+}
+```
+
+Then the server tries to follow it:
+
+```ts
+// server.ts
+import type { ChatEvents, ChatMethods, ChatState } from "./types";
+
+const state: ChatState = { messages: [] };
+
+socket.on("sendMessage", (input: ChatMethods["sendMessage"]) => {
+  const msg = { from: socket.id, text: input.text };
+  state.messages.push(msg);
+  io.emit("newMessage", msg satisfies ChatEvents["newMessage"]);
+});
+```
+
+And the client tries to follow it too:
+
+```ts
+// client.ts
+import type { ChatEvents, ChatMethods } from "./types";
+
+socket.emit("sendMessage", { text: "hello" } satisfies ChatMethods["sendMessage"]);
+
+socket.on("newMessage", (payload: ChatEvents["newMessage"]) => {
+  console.log(payload.text);
+});
+```
+
+This looks solid.
+
+It is still weaker than Zocket in several important ways.
+
+## Where explicit type files break down
+
+### 1. The event names are still just strings
+
+The payload may be typed, but `"sendMessage"` and `"newMessage"` are still string conventions.
+
+If you rename the server event and forget one client:
+
+```ts
+socket.on("new-message", (payload: ChatEvents["newMessage"]) => {
+  console.log(payload.text);
+});
+```
+
+your shared type file does not save you. The payload type is correct. The wire contract is still broken.
+
+In Zocket, method names and event names come directly from the actor definition, so the client API changes with the server definition.
+
+## 2. The types can drift from the implementation
+
+A shared type file is a second source of truth.
+
+That means the real system now lives in two places:
+
+- the implementation
+- the manually maintained types
+
+Those two things drift all the time.
+
+For example, someone updates the server logic:
+
+```ts
+const msg = {
+  from: socket.id,
+  text: input.text,
+  sentAt: Date.now(),
+};
+```
+
+but forgets to update `Message` in `types.ts`.
+
+Now:
+
+- the runtime sends `{ from, text, sentAt }`
+- the shared types still say `{ from, text }`
+
+The codebase compiles. The contract is already lying.
+
+In Zocket, the shape comes from the schema and handler definitions themselves, so there is no second file to forget.
+
+## 3. Explicit types usually do not validate anything at runtime
+
+TypeScript disappears at runtime.
+
+So this client call:
+
+```ts
+socket.emit("sendMessage", { txt: 123 });
+```
+
+can still happen if the caller is untyped, casted, or coming from another environment.
+
+Shared interfaces do not reject bad payloads on the server.
+
+Zocket method inputs and event payloads are backed by schemas, so the same definition gives you:
+
+- TypeScript inference at compile time
+- runtime validation at the boundary
+
+That is a much stronger guarantee.
+
+## 4. Return types are usually not part of the manual contract
+
+With raw socket systems, request and response shapes often end up being informal:
+
+```ts
+socket.emit("sendMessage", { text: "hi" }, (result) => {
+  console.log(result.messageId);
+});
+```
+
+Now you need another manually maintained type for the callback result.
+
+And then another one for errors.
+
+And another convention for timeouts.
+
+Zocket gets the return type from the method handler itself:
+
+```ts
+handler: ({ state, input, connectionId }) => {
+  const msg = { id: crypto.randomUUID(), from: connectionId, text: input.text };
+  state.messages.push(msg);
+  return { messageId: msg.id };
+}
+```
+
+The client immediately sees:
+
+```ts
+const result = await room.sendMessage({ text: "hi" });
+// { messageId: string }
+```
+
+No separate response type file is needed.
+
+## 5. State types are especially easy to fake
+
+In manual systems, people often write:
+
+```ts
+type ChatState = {
+  messages: Message[];
+};
+```
+
+But that does not tell you:
+
+- how the state is initialized
+- whether the server actually conforms to that shape
+- whether the client snapshot really matches it
+- whether patches preserve that shape over time
+
+It is only a compile-time promise.
+
+In Zocket, state comes from the actor's schema:
+
+```ts
+state: z.object({
+  messages: z.array(MessageSchema).default([]),
+}),
+```
+
+That one definition drives:
+
+- the server's state shape
+- the client's subscribed state type
+- the React selector input type
+- runtime validation of the initial state shape
+
+## 6. Tooling gets worse as your app grows
+
+With explicit type files, you have to manually thread types through every layer:
+
+- server handlers
+- emitted events
+- client wrappers
+- React hooks
+- local state selectors
+
+That usually leads to helper types like:
+
+```ts
+type EventMap = { ... };
+type MethodInputs = { ... };
+type MethodResults = { ... };
+type RoomState = { ... };
+```
+
+It works, but the amount of bookkeeping grows with the app.
+
+Zocket goes the other direction: you define the actor once, and the rest is inferred.
+
+## The same example in Zocket
+
+```ts
+import { z } from "zod";
+import { actor, createApp } from "@zocket/core";
+
+const MessageSchema = z.object({
+  id: z.string(),
+  from: z.string(),
+  text: z.string(),
+});
+
+const ChatRoom = actor({
+  state: z.object({
+    messages: z.array(MessageSchema).default([]),
+  }),
+
+  methods: {
+    sendMessage: {
+      input: z.object({ text: z.string() }),
+      handler: ({ state, input, connectionId, emit }) => {
+        const msg = {
+          id: crypto.randomUUID(),
+          from: connectionId,
+          text: input.text,
+        };
+
+        state.messages.push(msg);
+        emit("newMessage", msg);
+
+        return { messageId: msg.id };
+      },
+    },
+  },
+
+  events: {
+    newMessage: MessageSchema,
+  },
+});
+
+export const app = createApp({
+  actors: { chat: ChatRoom },
+});
+```
+
+From that one definition, Zocket gives you all of this automatically.
+
+## What Zocket infers, one by one
+
+### Actor names
+
+From:
+
+```ts
+createApp({
+  actors: { chat: ChatRoom },
+});
+```
+
+You get:
+
+```ts
+client.chat("general");
+client.game("general"); // type error
+```
+
+A shared type file usually does not protect this unless you build another explicit API wrapper.
+
+### Method names
+
+From:
+
+```ts
+methods: {
+  sendMessage: { ... }
+}
+```
+
+You get:
+
+```ts
+await room.sendMessage({ text: "hi" });
+await room.postMessage({ text: "hi" }); // type error
+```
+
+### Method input types
+
+From:
+
+```ts
+input: z.object({ text: z.string() })
+```
+
+You get:
+
+```ts
+await room.sendMessage({ text: "hi" });
+await room.sendMessage({ txt: "hi" }); // type error
+await room.sendMessage({ text: 123 }); // type error
+```
+
+And at runtime, invalid payloads are rejected too.
+
+### Method return types
+
+From:
+
+```ts
+return { messageId: msg.id };
+```
+
+You get:
+
+```ts
+const result = await room.sendMessage({ text: "hi" });
+result.messageId; // string
+result.id; // type error
+```
+
+No separate "response type" has to be authored and kept in sync.
+
+### Event names and payloads
+
+From:
+
+```ts
+events: {
+  newMessage: MessageSchema,
+}
+```
+
+You get:
+
+```ts
+room.on("newMessage", (payload) => {
+  payload.text; // string
+  payload.sentAt; // type error
+});
+
+room.on("message", () => {}); // type error
+```
+
+And on the server:
+
+```ts
+emit("newMessage", msg); // typed and validated
+emit("message", msg); // type error
+```
+
+### State shape
+
+From:
+
+```ts
+state: z.object({
+  messages: z.array(MessageSchema).default([]),
+})
+```
+
+You get:
+
+```ts
+room.state.subscribe((state) => {
+  state.messages[0]?.text;
+});
+```
+
+And in React:
+
+```tsx
+const messages = useActorState(room, (s) => s.messages);
+```
+
+The selector input is typed from the same actor definition. No extra `ChatState` wiring is required.
+
+### React actor names
+
+From:
+
+```ts
+createZocketReact<typeof app>()
+```
+
+You get:
+
+```tsx
+const room = useActor("chat", "general");
+const game = useActor("game", "general"); // type error if "game" does not exist
+```
+
+Again, this comes from the app definition, not a separately maintained string union.
+
+## Why this is stronger than manual types
+
+Zocket's type safety is stronger because it combines four things at once:
+
+### 1. Single source of truth
+
+You define the contract in one place: the actor.
+
+There is no separate "documentation type layer" to keep in sync with the runtime.
+
+### 2. Inference across layers
+
+The same definition flows into:
+
+- server handler context
+- emitted event payloads
+- client methods
+- state subscriptions
+- React hooks
+
+Manual type files can imitate parts of this, but only with more boilerplate and more places to drift.
+
+### 3. Runtime validation
+
+Schemas are not just for inference. They are also checked at runtime.
+
+That means the system is safer even when:
+
+- someone uses `as any`
+- a third-party client connects
+- an old client version sends the wrong shape
+
+Explicit interfaces cannot do that on their own.
+
+### 4. The API surface is generated from real code
+
+In Zocket, the client shape is literally derived from the server definition.
+
+That means renaming a method or event changes the client API immediately.
+
+With manual types, renaming often means updating:
+
+- runtime strings
+- shared type maps
+- wrappers
+- React helpers
+
+That is exactly the kind of duplication that creates stale contracts.
+
+## The honest takeaway
+
+Yes, you can get decent type safety in a raw socket setup with enough discipline.
+
+But it is still mostly manual.
+
+Zocket is different because its type safety is:
+
+- inferred instead of re-declared
+- validated instead of assumed
+- connected to the actual runtime instead of a parallel type layer
+
+That is why it holds up better as the app grows.
+
+If you want the API details behind this system, see [Types](/core/types/) and [Creating a Client](/client/creating-a-client/).

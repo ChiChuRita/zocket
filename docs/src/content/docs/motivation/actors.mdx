@@ -1,0 +1,147 @@
+---
+title: Why Actors
+description: Why Zocket models realtime systems around actors.
+sidebar:
+  order: 2
+---
+
+Actors are the central abstraction in Zocket because they match the natural shape of most realtime systems.
+
+## Realtime Apps Are Usually Collections of Stateful Things
+
+Most applications are not one giant socket.
+
+They are made from many separate, addressable things:
+
+- a chat room
+- a game match
+- a drawing canvas
+- a collaborative document
+- a presence channel
+
+Each of those things usually needs the same capabilities:
+
+- it owns state
+- it exposes methods that mutate that state
+- it emits events to interested clients
+- it cares about connections coming and going
+- it must handle concurrent actions safely
+
+That bundle of concerns is exactly what an actor is good at.
+
+## What "Actor" Means in Zocket
+
+In Zocket, an actor is:
+
+- a named definition
+- instantiated by ID
+- with its own state
+- its own methods
+- its own events
+- and its own lifecycle
+
+So instead of asking:
+
+- "what message type just arrived?"
+
+you ask:
+
+- "which room, match, or document is this for?"
+
+That shift matters. It turns your server from a message router into a collection of stateful units with clear ownership.
+
+## Why Not a Flat Bag of Handlers?
+
+Without an explicit unit like an actor, realtime code often collapses into routing logic:
+
+```ts
+socket.onmessage = async (event) => {
+  const msg = JSON.parse(event.data);
+
+  switch (msg.type) {
+    case "join-room":
+      // load room state
+      // check membership
+      // mutate room
+      // broadcast update
+      break;
+
+    case "send-message":
+      // load room state again
+      // validate input
+      // append message
+      // broadcast event
+      break;
+  }
+};
+```
+
+This works for a prototype, but it scales poorly in both senses:
+
+- the code for one logical thing gets scattered across many handlers
+- the runtime has no obvious unit to route, isolate, or place
+
+The room exists conceptually, but your code does not reflect that.
+
+## What It Looks Like With Actors
+
+With actors, the structure matches the problem:
+
+```ts
+const ChatRoom = actor({
+  state: z.object({
+    messages: z.array(MessageSchema).default([]),
+    members: z.array(z.string()).default([]),
+  }),
+
+  methods: {
+    join: {
+      input: z.object({ name: z.string() }),
+      handler: ({ state, input }) => {
+        state.members.push(input.name);
+      },
+    },
+
+    sendMessage: {
+      input: z.object({ text: z.string() }),
+      handler: ({ state, input, emit, connectionId }) => {
+        const message = { from: connectionId, text: input.text };
+        state.messages.push(message);
+        emit("message", message);
+      },
+    },
+  },
+
+  events: {
+    message: MessageSchema,
+  },
+});
+```
+
+Now the room is not an implicit convention. It is the actual unit of code.
+
+## Why This Shape Works Well
+
+### Local reasoning
+
+The state, methods, events, and lifecycle for one realtime thing live together. That makes the code easier to understand and change.
+
+### Single-writer semantics
+
+One actor instance processes one method at a time. That keeps concurrency problems local and dramatically reduces the amount of locking and coordination app code needs.
+
+### Natural scaling boundaries
+
+Rooms, matches, and documents are already the things you want to route and place in a distributed system. Actors make those boundaries explicit early.
+
+### Better mental model
+
+The API stops being "send some event name over the wire" and becomes "talk to this room" or "subscribe to this document." That is much closer to how developers already think about their app.
+
+## Why Zocket Uses Actors
+
+Zocket does not use actors because they sound clever. It uses them because they are the right shape for most realtime problems.
+
+If your app has many rooms, many games, or many documents, you already have many actors. Zocket just makes that explicit, typed, and easier to work with.
+
+If you want the API details next, continue to the [Actors reference](/core/actors/).

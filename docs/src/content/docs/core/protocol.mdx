@@ -137,7 +137,7 @@ Paths follow RFC 6902 pointer syntax: `/messages/0/text`, `/players/-` (append).
 The `@zocket/core` package exports builder functions for constructing messages:
 
 ```ts
-import { rpcCall, rpcResult, event, stateSub, stateSnapshot, statePatch } from "@zocket/core";
+import { rpcCall, rpcResult, event, stateSub, stateSnapshot, statePatch } from "@zocket/core/protocol";
 
 // Client builds:
 const msg = rpcCall("chat", "room-1", "sendMessage", { text: "hi" });
@@ -151,7 +151,7 @@ const patch = statePatch("chat", "room-1", [{ op: "add", path: "/count", value: 
 ## Parsing
 
 ```ts
-import { parseMessage } from "@zocket/core";
+import { parseMessage } from "@zocket/core/protocol";
 
 const msg = parseMessage(rawString);
 // Returns typed ClientMessage | ServerMessage | null

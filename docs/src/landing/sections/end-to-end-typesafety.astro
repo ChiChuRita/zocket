@@ -1,14 +1,56 @@
 ---
-import { EndToEndClientExample } from "../components/code-blocks/end-to-end-client";
-import { EndToEndServerExample } from "../components/code-blocks/end-to-end-server";
+import CodeBlock from "../components/code-block.astro";
+
+const serverCode = `import { z } from "zod";
+import { actor, createApp } from "@zocket/core";
+
+const ChatRoom = actor({
+  state: z.object({
+    messages: z.array(z.object({
+      from: z.string(),
+      text: z.string(),
+    })).default([]),
+  }),
+
+  methods: {
+    sendMessage: {
+      input: z.object({ from: z.string(), text: z.string() }),
+      handler: ({ state, input, emit }) => {
+        state.messages.push(input);
+        emit("newMessage", input);
+      },
+    },
+  },
+
+  events: {
+    newMessage: z.object({ from: z.string(), text: z.string() }),
+  },
+});
+
+export const app = createApp({ actors: { chat: ChatRoom } });`;
+
+const clientCode = `import { createClient } from "@zocket/client";
+import type { app } from "./server";
+
+const client = createClient<typeof app>({
+  url: "ws://localhost:3000",
+});
+
+const room = client.chat("general");
+
+await room.sendMessage({ from: "Alice", text: "Hi!" });
+
+room.state.subscribe((s) => {
+  console.log(s.messages); // fully typed
+});`;
 ---
 
-<section class="relative flex flex-col gap-7">
+<section class="relative flex flex-col gap-5">
   <div
     class="absolute left-1/2 top-1/2 -z-10 h-full w-full -translate-x-1/2 -translate-y-1/2 bg-[#0f9fff] opacity-20 blur-[200px] xl:opacity-10"
   >
   </div>
-  <header class="flex flex-col gap-2">
+  <header class="flex flex-col">
     <h1>
       end-to-end
       <span class="text-[#0f9fff]">typesafety</span>
@@ -21,8 +63,8 @@ import { EndToEndServerExample } from "../components/code-blocks/end-to-end-serv
       > schemas. Never worry about sending the wrong data again.
     </h3>
   </header>
-  <div class="flex flex-col gap-10 xl:flex-row">
-    <EndToEndServerExample client:visible />
-    <EndToEndClientExample client:visible />
+  <div class="flex flex-col gap-4 xl:flex-row">
+    <CodeBlock title="server.ts" code={serverCode} />
+    <CodeBlock title="client.ts" code={clientCode} />
   </div>
 </section>

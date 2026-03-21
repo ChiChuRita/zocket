@@ -1,59 +1,63 @@
 ---
-import { Button } from "../components/ui/button";
+import CodeBlock from "../components/code-block.astro";
+
+const installCode = `bun add @zocket/core @zocket/server @zocket/client zod`;
 ---
 
-<section class="relative flex flex-col gap-7">
+<section class="relative flex flex-col gap-4">
   <div
     class="absolute left-1/2 top-1/2 -z-10 h-full w-full -translate-x-1/2 -translate-y-1/2 bg-primary opacity-[10%] blur-[200px]"
   >
   </div>
-  <header class="flex flex-col gap-2">
-    <h1>ready to <span class="text-primary">build</span>?</h1>
+  <header>
+    <h1>ready to <span class="text-[#f97316]">build</span>?</h1>
     <h3 class="max-w-lg">
       Get started with Zocket in minutes. Define your first actor, connect a
       client, and ship realtime features with full type safety.
     </h3>
   </header>
-  <div class="flex flex-col gap-4 xl:flex-row xl:gap-6">
-    <div class="ctn flex flex-col gap-5 rounded-xl p-4 xl:p-8">
-      <h2>1. Install</h2>
-      <code class="rounded-md bg-black/50 px-4 py-2 font-mono text-primary">
-        bun add @zocket/core @zocket/server @zocket/client zod
-      </code>
+  <div class="flex flex-col gap-4 xl:flex-row">
+    <div class="flex flex-1 flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.03] p-5">
+      <div class="flex items-center gap-2.5">
+        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-[#f97316] text-xs font-bold text-black">1</span>
+        <h2>Install</h2>
+      </div>
+      <CodeBlock title="terminal" code={installCode} lang="bash" />
     </div>
-    <div class="ctn flex flex-col gap-5 rounded-xl p-4 xl:p-8">
-      <h2>2. Define Actors</h2>
-      <p class="max-w-md">
+    <div class="flex flex-1 flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.03] p-5">
+      <div class="flex items-center gap-2.5">
+        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-[#f97316] text-xs font-bold text-black">2</span>
+        <h2>Define Actors</h2>
+      </div>
+      <h3>
         Create typed actors with state schemas, methods, events, and lifecycle
         hooks — all validated by Zod.
-      </p>
+      </h3>
     </div>
-    <div class="ctn flex flex-col gap-5 rounded-xl p-4 xl:p-8">
-      <h2>3. Ship It</h2>
-      <p class="max-w-md">
+    <div class="flex flex-1 flex-col gap-3 rounded-lg border border-white/[0.06] bg-white/[0.03] p-5">
+      <div class="flex items-center gap-2.5">
+        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-[#f97316] text-xs font-bold text-black">3</span>
+        <h2>Ship It</h2>
+      </div>
+      <h3>
         Connect clients with full type inference. Use React hooks for
         selector-based state subscriptions.
-      </p>
+      </h3>
     </div>
   </div>
-  <div class="flex flex-row gap-4 pt-4">
-    <a href="/getting-started/">
-      <Button
-        className="xl:text-lg px-6 xl:px-10"
-        size="lg"
-      >
-        Read the Docs
-      </Button>
+  <div class="flex flex-row gap-3">
+    <a
+      href="/getting-started/"
+      class="rounded-md bg-[#f97316] px-6 py-2.5 text-sm font-medium text-black transition-opacity hover:opacity-90 xl:text-base"
+    >
+      Read the Docs
     </a>
-    <a href="https://github.com/ChiChuRita/zocket">
-      <Button
-        variant="secondary"
-        className="xl:text-lg px-6 xl:px-10 flex gap-3"
-        size="lg"
-      >
-        <img src="/github-mark-white.svg" class="w-5" alt="GitHub" />
-        View Source
-      </Button>
+    <a
+      href="https://github.com/ChiChuRita/zocket"
+      class="flex items-center gap-2 rounded-md bg-white/[0.08] px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/[0.12] xl:text-base"
+    >
+      <img src="/github-mark-white.svg" class="h-4 w-4" alt="GitHub" />
+      View Source
     </a>
   </div>
 </section>

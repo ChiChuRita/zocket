@@ -1,212 +1,128 @@
 # Zocket
 
-> Type-safe WebSocket library with end-to-end type safety, similar to tRPC
+> Typed actors for realtime apps
 
-A modern, type-safe WebSocket library that brings the developer experience of tRPC to real-time applications. Build WebSocket applications with full TypeScript inference, schema validation, and runtime safety.
+Define stateful actors with typed methods, events, and state — then call them from any client with full end-to-end type safety over WebSockets.
+
+**[Documentation](https://docs.zocket.ws)** | **[Getting Started](https://docs.zocket.ws/getting-started/)**
 
 ## Features
 
-- **End-to-end Type Safety** - Full TypeScript inference from server to client
-- **Schema Validation** - Works with Zod, Valibot, and any Standard Schema compatible library
-- **Real-time Rooms** - Built-in support for WebSocket rooms/channels
-- **Middleware Support** - Composable middleware for authentication, logging, etc.
-- **Reconnect Helpers** - Manual reconnect and connection lifecycle hooks
-- **React Integration** - First-class React hooks support
-- **Runtime Agnostic** - Works with Bun, Node.js, Deno, and browsers
+- **Actor Model** — stateful units with sequential execution, no race conditions
+- **End-to-End Type Safety** — define once with Zod, types flow to client automatically
+- **State Sync** — Immer-managed state with JSON patch broadcasting
+- **RPC over WebSocket** — request/response with timeout, pending tracking, auto-reconnect
+- **Events** — typed pub/sub with lazy subscriptions
+- **Middleware** — chainable auth, context enrichment with full type inference
+- **React Hooks** — `useActor`, `useActorState`, `useEvent`, `useConnectionStatus`
+- **Lifecycle Hooks** — `onConnect` / `onDisconnect` for presence tracking
 
 ## Packages
 
-This monorepo contains the following packages:
-
-- **[@zocket/core](./packages/core)** - Router builder + server helpers/adapters
-- **[@zocket/client](./packages/client)** - Browser WebSocket client with typed `send`/`on`
-- **[@zocket/react](./packages/react)** - React bindings (`ZocketProvider`, `useZocket`, `useEvent`)
+| Package | Description |
+|---------|-------------|
+| `@zocket/core` | Actor definitions, types, protocol |
+| `@zocket/server` | Runtime, actor manager, platform adapters |
+| `@zocket/client` | WebSocket client with RPC, reconnection, state sync |
+| `@zocket/react` | React hooks and context provider |
 
 ## Quick Start
 
-### Installation
-
 ```bash
-bun add @zocket/core @zocket/client @zocket/react zod
+bun add @zocket/core @zocket/server @zocket/client zod
 ```
 
-### Server
+### Define an Actor
 
-```typescript
+```ts
 import { z } from "zod";
-import { zocket, createBunServer } from "@zocket/core";
+import { actor, createApp } from "@zocket/core";
 
-const zo = zocket.create({
-  headers: z.object({
-    authorization: z.string(),
+const ChatRoom = actor({
+  state: z.object({
+    messages: z.array(z.object({
+      from: z.string(),
+      text: z.string(),
+    })).default([]),
   }),
-  onConnect: (headers, clientId) => {
-    return { userId: headers.authorization };
+
+  methods: {
+    sendMessage: {
+      input: z.object({ from: z.string(), text: z.string() }),
+      handler: ({ state, input }) => {
+        state.messages.push(input);
+      },
+    },
   },
 });
 
-export const appRouter = zo
-  .router()
-  .outgoing({
-    chat: {
-      onMessage: z.object({ text: z.string(), from: z.string() }),
-    },
-  })
-  .incoming(({ send }) => ({
-    chat: {
-      message: zo.message
-        .input(z.object({ text: z.string() }))
-        .handle(({ ctx, input }) => {
-          send.chat
-            .onMessage({
-              text: input.text,
-              from: ctx.userId,
-            })
-            .broadcast();
-        }),
-    },
-  }));
+export const app = createApp({ actors: { chat: ChatRoom } });
+```
 
-export type AppRouter = typeof appRouter;
+### Serve It
 
-const handlers = createBunServer(appRouter, zo);
+```ts
+import { serve } from "@zocket/server/bun";
+import { app } from "./app";
 
-Bun.serve({
-  fetch: handlers.fetch,
-  websocket: handlers.websocket,
-  port: 3000,
+serve(app, { port: 3000 });
+```
+
+### Connect a Client
+
+```ts
+import { createClient } from "@zocket/client";
+import type { app } from "./app";
+
+const client = createClient<typeof app>({ url: "ws://localhost:3000" });
+
+const room = client.chat("general");
+await room.sendMessage({ from: "Alice", text: "Hello!" });
+
+room.state.subscribe((state) => {
+  console.log(state.messages);
 });
 ```
 
-### Server-initiated messages (push)
-
-You can send outgoing messages from anywhere in your server code (cron jobs, DB listeners, admin tools, etc.) using `handlers.send`:
-
-```typescript
-handlers.send.chat
-  .onMessage({ text: "Hello from the server!", from: "system" })
-  .broadcast();
-```
-
-### Client (React)
+### Use with React
 
 ```tsx
-import { useState } from "react";
-import {
-  ZocketProvider,
-  useZocket,
-  useConnectionState,
-  createZocketClient,
-} from "@zocket/react";
-import type { AppRouter } from "./server";
+import { createClient } from "@zocket/client";
+import { createZocketReact } from "@zocket/react";
+import type { app } from "./app";
 
-const zocketClient = createZocketClient<AppRouter>("ws://localhost:3000", {
-  // Browser clients can’t send real HTTP headers; Zocket maps these to URL query params.
-  headers: { authorization: "user-token" },
-});
+const client = createClient<typeof app>({ url: "ws://localhost:3000" });
+const { ZocketProvider, useActor, useActorState } = createZocketReact<typeof app>();
 
-function App() {
+function Chat() {
+  const room = useActor("chat", "general");
+  const messages = useActorState(room, (s) => s.messages);
+
   return (
-    <ZocketProvider<AppRouter> client={zocketClient}>
-      <ChatComponent />
-    </ZocketProvider>
+    <ul>
+      {messages?.map((m, i) => (
+        <li key={i}>{m.from}: {m.text}</li>
+      ))}
+    </ul>
   );
 }
 
-function ChatComponent() {
-  const { client, useEvent } = useZocket<AppRouter>();
-  const { status } = useConnectionState(client);
-  const [messages, setMessages] = useState<
-    Array<{ text: string; from: string }>
-  >([]);
-
-  // `client.on.*` subscriptions are stable (cached), so this won’t resubscribe every render.
-  useEvent(client.on.chat.onMessage, (data) => {
-    setMessages((prev) => [...prev, data]);
-  });
-
+function App() {
   return (
-    <div>
-      <div>Connection: {status}</div>
-      {messages.map((msg, i) => (
-        <div key={i}>
-          {msg.from}: {msg.text}
-        </div>
-      ))}
-      <button onClick={() => client.chat.message({ text: "Hello!" })}>
-        Send
-      </button>
-    </div>
+    <ZocketProvider client={client}>
+      <Chat />
+    </ZocketProvider>
   );
 }
 ```
 
 ## Development
 
-### Install Dependencies
-
 ```bash
 bun install
+bun test packages/server/test/
 ```
-
-### Build All Packages
-
-```bash
-cd packages/core && bun run build
-cd packages/react && bun run build
-```
-
-### Run Tests
-
-```bash
-cd packages/core && bun test
-```
-
-### Development Mode
-
-```bash
-cd packages/core && bun run dev
-```
-
-## Monorepo Structure
-
-```
-zocket/
-├── packages/
-│   ├── core/           # Router builder + server helpers
-│   ├── client/         # Browser client
-│   └── react/          # React bindings
-└── docs/               # Documentation site
-```
-
-## Documentation
-
-For comprehensive documentation, see the docs site at [`./docs`](./docs) or check individual package READMEs:
-
-- [@zocket/core README](./packages/core/README.md)
-- [@zocket/client README](./packages/client/README.md)
-- [@zocket/react README](./packages/react/README.md)
-
-## Examples
-
-This repo’s tests are a good source of copy-pasteable examples:
-
-- `packages/core/test/simple.test.ts` (ping/pong + server push)
-- `packages/core/test/rooms.test.ts` (rooms)
-- `packages/core/test/fluent-api.test.ts` (middleware + routing patterns)
-- `packages/core/test/valibot.test.ts` (Valibot integration)
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-MIT © [Rahul Singh](https://github.com/ChiChuRita)
-
-## Author
-
-**Rahul Singh**
-
-- Email: ra.singh069@gmail.com
-- GitHub: [@ChiChuRita](https://github.com/ChiChuRita)
+MIT

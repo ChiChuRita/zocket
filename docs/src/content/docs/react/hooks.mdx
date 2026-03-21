@@ -26,7 +26,7 @@ const room = useActor("chat", roomId);
 - `actorName` — must match a key in your app's `actors` (typed and autocompleted)
 - `actorId` — the instance identifier (e.g. `"room-1"`)
 
-The handle is **ref-counted** — multiple components can share the same actor without one unmount killing the other's connection. On unmount, `$dispose()` is called automatically.
+The handle is **ref-counted** — multiple components can share the same actor without one unmount killing the other's connection. On unmount, `meta.dispose()` is called automatically.
 
 ```tsx
 function ChatRoom({ roomId }: { roomId: string }) {

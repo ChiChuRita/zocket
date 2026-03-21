@@ -3,6 +3,10 @@ title: Actors
 description: Define stateful actors with typed methods, events, and lifecycle hooks.
 ---
 
+This page is the API reference for actors.
+
+If you want the conceptual background first, read [Why Actors](/motivation/actors/).
+
 Actors are the core building block of Zocket. Each actor definition describes a **stateful unit** with a schema-validated state, typed methods, events, and lifecycle hooks.
 
 ## Defining an Actor
@@ -158,6 +162,8 @@ const Room = actor({
 ```
 
 Lifecycle hooks receive a `LifecycleContext` with `state` (Immer draft), `connectionId`, and `emit`. They are queued alongside method calls to preserve ordering.
+
+Note: middleware `ctx` is **not** available in lifecycle hooks — only in method handlers.
 
 ## Full Example: Drawing Room
 

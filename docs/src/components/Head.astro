@@ -3,4 +3,7 @@ import type { Props } from "@astrojs/starlight/props";
 import Default from "@astrojs/starlight/components/Head.astro";
 ---
 
-<Default {...Astro.props}><slot /></Default>
+<Default {...Astro.props}>
+  <link rel="alternate" type="text/plain" href="/llms.txt" title="LLMs.txt" />
+  <slot />
+</Default>

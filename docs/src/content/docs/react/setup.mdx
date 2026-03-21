@@ -31,6 +31,7 @@ export const {
   useActor,
   useEvent,
   useActorState,
+  useConnectionStatus,
 } = createZocketReact<typeof app>();
 ```
 
@@ -55,13 +56,14 @@ The provider makes the client available to all hooks via React Context.
 
 ## What You Get
 
-| Export            | Description                                     |
-| :---------------- | :---------------------------------------------- |
-| `ZocketProvider`  | Context provider — wrap your app with it         |
-| `useClient`       | Get the typed client from context                |
-| `useActor`        | Get a ref-counted actor handle                   |
-| `useEvent`        | Subscribe to actor events with auto-cleanup      |
-| `useActorState`   | Subscribe to actor state with optional selector  |
+| Export                | Description                                     |
+| :-------------------- | :---------------------------------------------- |
+| `ZocketProvider`      | Context provider — wrap your app with it         |
+| `useClient`           | Get the typed client from context                |
+| `useActor`            | Get a ref-counted actor handle                   |
+| `useEvent`            | Subscribe to actor events with auto-cleanup      |
+| `useActorState`       | Subscribe to actor state with optional selector  |
+| `useConnectionStatus` | Returns the WebSocket connection status           |
 
 All hooks are fully typed from your actor definitions — no manual type annotations needed.
 

@@ -1,0 +1,109 @@
+---
+title: Philosophy
+description: The design principles behind Zocket.
+sidebar:
+  order: 1
+---
+
+Zocket exists because building realtime apps in TypeScript still usually means choosing between two bad options:
+
+- use a raw WebSocket and hand-roll your own protocol, state sync, and concurrency model
+- use an event-driven library that improves ergonomics a bit, but still leaves your actual application structure up to you
+
+That gets a basic demo working, but it does not age well.
+
+## The Problems Zocket Cares About
+
+### 1. The wire is usually stringly typed
+
+With raw sockets or Socket.io-style APIs, server and client are connected by event names and payload conventions.
+
+```ts
+socket.emit("chat:message", { text: "hello" });
+
+socket.on("chat:mesage", (data) => {
+  console.log(data.txt);
+});
+```
+
+That looks fine until you rename an event, change a payload, or misspell one side. Then the type system stops helping exactly where you need it most: at the boundary between server and client.
+
+Zocket's answer is to define the shape once on the server and infer the client API from that source of truth.
+
+### 2. State sync is not a side concern
+
+Most realtime apps are not just "fire an event and forget." They have shared state:
+
+- a room roster
+- a game board
+- a document tree
+- a presence map
+- a running score
+
+With lower-level tools, keeping that state in sync becomes app code:
+
+- invent a patch protocol
+- decide what to rebroadcast
+- track who is subscribed
+- recover when the client reconnects
+
+Zocket treats state sync as part of the core runtime instead of something every app reimplements.
+
+### 3. Server logic needs a shape
+
+The hardest part of realtime code is usually not transport. It is organization.
+
+Once an app grows beyond a few messages, you need a clear answer to questions like:
+
+- where does the state for this room live?
+- which code owns mutations to that state?
+- how do concurrent actions get serialized?
+- where do connection lifecycle hooks belong?
+- what is the unit we route, scale, and reason about?
+
+Zocket's answer is: make that unit explicit.
+
+## The Design Principles
+
+### Define once, infer everywhere
+
+The server should be the source of truth for:
+
+- method names
+- input types
+- return types
+- event payloads
+- state shape
+
+The client and React layers should inherit that automatically.
+
+### Treat state as a product feature
+
+State synchronization is not a helper utility in a realtime system. It is most of the product experience. So Zocket bakes it in instead of treating it like optional glue code.
+
+### Make the unit of coordination explicit
+
+A realtime app is usually made from many isolated stateful things. The runtime should expose that directly instead of forcing everything into a global message handler.
+
+### Prefer local reasoning
+
+The more logic you can keep attached to one room, one document, or one match, the easier it is to understand, test, and operate.
+
+## What Zocket Is Trying To Feel Like
+
+Not:
+
+- a thin transport wrapper
+- a generic pub/sub utility
+- a bag of event handlers with better autocomplete
+
+But:
+
+- an application runtime for stateful realtime units
+- with typed methods
+- built-in state sync
+- and clear ownership over where logic lives
+
+That is why the rest of the library looks the way it does.
+
+If you want the deeper reasoning behind the core abstraction, continue to [Why Actors](/motivation/actors/).

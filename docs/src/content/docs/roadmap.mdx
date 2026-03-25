@@ -1,0 +1,334 @@
+---
+title: Roadmap
+description: Upcoming features — timers, cron, actor-to-actor calls, streaming, and AI SDK integration.
+---
+
+Features that are designed and coming soon. The APIs shown here are stable — implementation is in progress.
+
+## Timers
+
+Actors can schedule delayed self-calls. A timer invokes a method on the same actor instance after a delay, through the same sequential queue.
+
+```ts
+import { z } from "zod";
+import { actor } from "@zocket/core";
+
+const GameRoom = actor({
+  state: z.object({
+    phase: z.enum(["lobby", "countdown", "playing"]).default("lobby"),
+  }),
+
+  methods: {
+    startCountdown: {
+      handler: ({ state, timer }) => {
+        state.phase = "countdown";
+        timer.after(10_000).beginRound();
+      },
+    },
+    beginRound: {
+      handler: ({ state }) => {
+        state.phase = "playing";
+      },
+    },
+  },
+});
+```
+
+`timer` is available in every handler context — method handlers, `onConnect`, `onDisconnect`, `onActivate`.
+
+### API
+
+`timer.after(ms)` and `timer.every(ms)` return a typed proxy of the actor's own methods. Calling a method on the proxy schedules it.
+
+```ts
+timer.after(5000).beginRound();           // one-shot, autocompletes method names
+timer.every(1000).tick();                 // recurring interval
+timer.after(5000).set({ value: 10 });     // input type-checked against schema
+
+const id = timer.every(1000).tick();      // returns cancellable ID
+timer.cancel(id);
+```
+
+Fully type-safe — method names autocomplete, inputs are checked against schemas, typos are caught at compile time. The same method chaining pattern as the client SDK.
+
+### Queueing behavior
+
+Timer-invoked methods go through the same sequential queue as client-initiated calls. If a method is currently executing when a timer fires, the timer's method call waits in the queue until the current method finishes. This preserves the single-writer guarantee — no concurrent execution, ever.
+
+All timers are cleared when an actor is deactivated or destroyed.
+
+---
+
+## Cron
+
+Actors can declare recurring schedules as part of their definition. Auto-started on activation, auto-stopped on deactivation.
+
+```ts
+const Presence = actor({
+  state: z.object({
+    users: z.record(z.number()).default({}),
+  }),
+
+  methods: {
+    heartbeat: {
+      handler: ({ state, connectionId }) => {
+        state.users[connectionId] = Date.now();
+      },
+    },
+    cleanup: {
+      handler: ({ state }) => {
+        const now = Date.now();
+        for (const [id, lastSeen] of Object.entries(state.users)) {
+          if (now - lastSeen > 30_000) delete state.users[id];
+        }
+      },
+    },
+  },
+
+  cron: {
+    cleanup: { every: 30_000 },
+  },
+});
+```
+
+Method names are type-checked against the actor's defined methods at compile time. Only methods without required input can be used with cron — there's no way to pass input to a cron-scheduled call.
+
+Cron is syntactic sugar — internally it creates intervals via the timer system during `onActivate`. You can achieve the same thing programmatically with `timer.every(30_000).cleanup()` inside `onActivate`.
+
+---
+
+## Actor-to-Actor Calls
+
+Actors can call methods on other actor instances from within a handler.
+
+```ts
+const Lobby = actor({
+  state: z.object({
+    players: z.array(z.string()).default([]),
+  }),
+
+  methods: {
+    startMatch: {
+      handler: async ({ state, actors }) => {
+        const matchId = crypto.randomUUID();
+        await actors.match(matchId).initialize({
+          players: state.players,
+        });
+        state.players = [];
+        return { matchId };
+      },
+    },
+  },
+});
+```
+
+`actors` provides a proxy with the same shape as the client SDK: `actors.actorType(id).method(input)`.
+
+### Fire-and-forget
+
+By default, actor-to-actor calls are request/response — the caller awaits the result. For background work and delegation, you can call without awaiting:
+
+```ts
+handler: async ({ state, actors }) => {
+  // Request/response — waits for result
+  const result = await actors.researcher("topic").search({ query: "..." });
+
+  // Fire-and-forget — don't await, work happens in background
+  actors.worker("abc").process({ data: state.items });
+  // no await — returns immediately, result ignored
+}
+```
+
+Fire-and-forget is important for agent delegation (tell 5 workers to start without blocking) and for avoiding deadlocks in circular actor communication.
+
+### Typing
+
+Actor-to-actor calls are not type-safe at the `actor()` definition level. This is a fundamental TypeScript limitation — `actor()` is called before `createApp()` assembles the registry, creating a circular type dependency that cannot be resolved. At runtime, the proxy is fully functional. Errors surface as runtime exceptions.
+
+This is the same trade-off other actor frameworks make (Erlang GenServers, Temporal activities).
+
+---
+
+## Mid-Handler State Flushing
+
+By default, state patches are computed and broadcast when a handler finishes. `flush()` lets you broadcast patches at any point during execution — critical for streaming LLM tokens, progress indicators, or any long-running operation.
+
+```ts
+handler: async ({ state, flush }) => {
+  state.status = "thinking";
+  flush(); // client sees "thinking" immediately
+
+  for await (const chunk of llmStream) {
+    state.output += chunk;
+    flush(); // client sees each token
+  }
+
+  state.status = "done";
+  // final patches broadcast automatically when handler returns
+}
+```
+
+Without `flush()`, a 3-second LLM call means the client sees nothing for 3 seconds, then the entire response appears at once. With `flush()`, updates stream in real-time.
+
+Under the hood, `flush()` finalizes the current Immer draft, computes JSON patches, broadcasts them to subscribers, then creates a fresh draft for the rest of the handler.
+
+---
+
+## Streaming RPC
+
+Separate from `flush()` (which streams state patches), Streaming RPC lets a method send partial **return values** to the caller before completing.
+
+Use `flush()` when you want all state subscribers to see updates. Use Streaming RPC when you want to stream data back to the specific caller who invoked the method.
+
+A new protocol message type `rpc:stream` sends chunks before the final `rpc:result`:
+
+```
+→ { type: "rpc",        id: "rpc_1", actor: "agent", actorId: "run-1", method: "generate", input: { prompt: "..." } }
+← { type: "rpc:stream", id: "rpc_1", chunk: "Hello" }
+← { type: "rpc:stream", id: "rpc_1", chunk: " world" }
+← { type: "rpc:result", id: "rpc_1", result: "Hello world" }
+```
+
+This is a general-purpose mechanism — useful for AI token streaming, file processing progress, or any method that produces incremental output.
+
+---
+
+## AI SDK Integration
+
+Zocket integrates with the Vercel AI SDK and TanStack AI SDK. Developers keep their familiar `useChat()` hooks — the backend is a Zocket actor instead of an API route.
+
+### Server
+
+```ts
+import { streamText } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { actor } from "@zocket/core";
+import { aiHandler } from "@zocket/ai";
+
+const Conversation = actor({
+  state: z.object({
+    messages: z.array(z.any()).default([]),
+  }),
+
+  methods: {
+    chat: aiHandler({
+      model: openai("gpt-4o"),
+    }),
+  },
+});
+```
+
+`aiHandler()` wraps the AI SDK's `streamText()` into a Zocket actor method. It reads messages from actor state, calls the LLM, streams the response in the AI SDK's wire format, and updates `state.messages` when complete.
+
+### Client
+
+```tsx
+import { useChat } from "ai/react";
+import { useZocketAI } from "@zocket/ai/react";
+
+function Chat({ id }: { id: string }) {
+  const { messages, input, handleSubmit, isLoading } = useChat({
+    fetch: useZocketAI("conversation", id),
+  });
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {messages.map(m => <Message key={m.id} {...m} />)}
+      <input value={input} onChange={e => setInput(e.target.value)} />
+    </form>
+  );
+}
+```
+
+`useZocketAI()` returns a `fetch`-compatible adapter that translates `useChat()`'s HTTP requests into Zocket WebSocket messages. The AI SDK hooks work unchanged.
+
+### What this gives you over plain `useChat()`
+
+By putting `useChat()` on top of a Zocket actor instead of an API route:
+
+- **Multiplayer conversations** — open the same chat in two tabs, both see tokens stream. HTTP-based `useChat()` is per-client.
+- **Server-authoritative history** — the actor owns the messages. No client-side state to reconcile.
+- **Actor lifecycle** — timeouts, tool delegation to other actors, cron for periodic work.
+- **Survives reconnects** — the actor persists across WebSocket disconnections.
+
+### Packages
+
+| Package | What it does |
+|---------|-------------|
+| `@zocket/ai` | Server — `aiHandler()` wraps AI SDK's `streamText` into actor methods |
+| `@zocket/ai/react` | Client — `useZocketAI()` adapter for `useChat({ fetch })` |
+
+---
+
+## How They Compose
+
+These features work together naturally. Here's an AI agent that uses timers for timeout safety, actor-to-actor calls for tool delegation, and `flush()` for streaming state to the UI:
+
+```ts
+import { streamText } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { actor } from "@zocket/core";
+
+const AgentRun = actor({
+  state: z.object({
+    messages: z.array(z.any()).default([]),
+    status: z.enum(["running", "waiting", "done"]).default("running"),
+  }),
+
+  methods: {
+    start: {
+      input: z.object({ prompt: z.string() }),
+      handler: async ({ state, input, timer, actors, flush }) => {
+        state.messages.push({ role: "user", content: input.prompt });
+        state.messages.push({ role: "assistant", content: "" });
+        flush();
+
+        // Stream LLM response using AI SDK
+        const result = streamText({
+          model: openai("gpt-4o"),
+          messages: state.messages.slice(0, -1),
+        });
+
+        for await (const chunk of result.textStream) {
+          state.messages.at(-1).content += chunk;
+          flush(); // client sees each token
+        }
+
+        // Delegate tool calls to other actors
+        if (result.toolCalls?.length) {
+          for (const tool of result.toolCalls) {
+            await actors.tool(tool.name).execute(tool.args);
+          }
+        }
+
+        // Safety timeout
+        timer.after(30_000).timeout();
+        state.status = "done";
+      },
+    },
+
+    timeout: {
+      handler: ({ state }) => {
+        if (state.status === "running") {
+          state.status = "done";
+        }
+      },
+    },
+  },
+});
+```
+
+Timer for timeout safety. Actor-to-actor for tool delegation. `flush()` for token streaming. All running through the same sequential queue with single-writer guarantees.
+
+---
+
+## Type Safety
+
+| Feature | Type-safe? | Details |
+|---------|-----------|---------|
+| `timer.after(ms).method()` | Yes | Method names autocomplete, inputs type-checked |
+| `timer.every(ms).method()` | Yes | Same |
+| `timer.cancel(id)` | Yes | |
+| `cron: { method: { every } }` | Yes | Method names constrained to `keyof TMethods` |
+| `flush()` | Yes | No arguments |
+| `actors.type(id).method()` | No | Circular type dependency at definition time |

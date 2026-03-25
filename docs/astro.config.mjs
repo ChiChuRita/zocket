@@ -6,7 +6,7 @@ import react from "@astrojs/react";
 import tailwind from "@astrojs/tailwind";
 
 export default defineConfig({
-  site: "https://zocket-docs.pages.dev",
+  site: "https://zocket.io",
   integrations: [
     starlight({
       plugins: [
@@ -74,6 +74,15 @@ export default defineConfig({
         {
           label: "Comparison",
           slug: "comparison",
+        },
+        {
+          label: "Use Cases",
+          slug: "use-cases",
+        },
+        {
+          label: "Roadmap",
+          slug: "roadmap",
+          badge: { text: "Soon", variant: "note" },
         },
         {
           label: "Core Concepts",

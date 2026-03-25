@@ -64,19 +64,98 @@
   }
 
   h1 {
-    @apply text-3xl font-bold tracking-tight text-white xl:text-4xl leading-tight;
+    @apply text-4xl md:text-5xl xl:text-6xl font-bold tracking-tight text-white;
   }
 
   h2 {
-    @apply text-lg font-semibold text-white leading-tight;
+    @apply text-lg font-semibold text-white;
   }
 
   h3 {
-    @apply text-sm leading-snug text-white/60 xl:text-base;
+    @apply text-sm md:text-base xl:text-lg font-normal text-white/70 mt-1;
   }
+
+}
+
+/* Override Starlight's styles for landing page */
+[data-radix-collection-item] {
+  background: transparent !important;
+}
+
+a {
+  text-decoration: none !important;
 }
 
 @layer components {
+  /* Noise texture overlay */
+  .noise-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 200px 200px;
+  }
+
+  /* Section glow — unified soft glow */
+  .section-glow {
+    @apply absolute left-1/2 top-1/2 -z-10 h-full w-full -translate-x-1/2 -translate-y-1/2 rounded-full blur-[200px] opacity-[8%];
+  }
+
+  /* Dot-grid background pattern */
+  .dot-grid {
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Card hover glow */
+  .glow-card {
+    @apply transition-all duration-300;
+  }
+  .glow-card:hover {
+    border-color: rgba(249, 115, 22, 0.25);
+    box-shadow:
+      0 0 30px rgba(249, 115, 22, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  /* Scroll reveal animation */
+  .reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Hero stagger entrance */
+  @keyframes hero-fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(32px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .hero-stagger {
+    & > * {
+      opacity: 0;
+      animation: hero-fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    & > *:nth-child(1) { animation-delay: 0s; }
+    & > *:nth-child(2) { animation-delay: 0.08s; }
+    & > *:nth-child(3) { animation-delay: 0.16s; }
+    & > *:nth-child(4) { animation-delay: 0.24s; }
+    & > *:nth-child(5) { animation-delay: 0.32s; }
+  }
+
   .ctn {
     @apply border border-white/[0.06] bg-white/[0.03] backdrop-blur-lg;
   }

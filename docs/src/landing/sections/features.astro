@@ -1,7 +1,7 @@
 ---
 import CodeBlock from "../components/code-block.astro";
 
-const middlewareCode = `import { middleware, actor } from "@zocket/core";
+const middlewareCode = `import { middleware } from "@zocket/core";
 import { z } from "zod";
 import { validateToken } from "./auth";
 
@@ -9,153 +9,211 @@ const authed = middleware()
   .use(async ({ connectionId }) => {
     const user = await validateToken(connectionId);
     if (!user) throw new Error("Unauthorized");
-    return { userId: user.id, role: user.role };
+    return { userId: user.id, workspaceId: user.workspaceId };
   });
 
-const PrivateRoom = authed.actor({
+const SupportThread = authed.actor({
   state: z.object({
-    messages: z.array(z.object({
-      user: z.string(),
-      text: z.string(),
-    })).default([]),
+    messages: z.array(z.string()).default([]),
   }),
-
   methods: {
-    send: {
+    reply: {
       input: z.object({ text: z.string() }),
       handler: ({ state, input, ctx }) => {
-        // ctx.userId and ctx.role are fully typed
-        state.messages.push({
-          user: ctx.userId,
-          text: input.text,
-        });
+        state.messages.push(ctx.userId + ": " + input.text);
       },
     },
   },
 });`;
 
-const errorServerCode = `const GameRoom = actor({
+const validationErrorCode = `const AgentSession = actor({
   state: z.object({
-    players: z.array(z.string()).default([]),
+    status: z.enum(["active", "closed"]).default("active"),
+    messages: z.array(z.string()).default([]),
   }),
-
   methods: {
-    join: {
-      input: z.object({ name: z.string() }),
+    sendUserMessage: {
+      input: z.object({ text: z.string().min(1) }),
       handler: ({ state, input }) => {
-        if (state.players.length >= 4) {
-          throw new Error("Room is full!");
-        }
-        state.players.push(input.name);
+        if (state.status === "closed")
+          throw new Error("Session is closed.");
+        state.messages.push(input.text);
       },
     },
   },
 });`;
 
-const errorClientCode = `const room = client.game("room-1");
+const validationErrorClientCode = `const session = client.agent("customer-123");
 
 try {
-  await room.join({ name: "Alice" });
+  await session.sendUserMessage({ text: "refund status?" });
 } catch (err) {
-  console.log(err.message); // "Room is full!"
+  console.log(err.message); // "Session is closed."
 }`;
 
-const stateCode = `// Subscribe to full actor state
-const room = client.chat("general");
-room.state.subscribe((state) => {
-  console.log(state.messages);
-});
+const stateCode = `// React: subscribe to the slices you actually render
+const messages = useActorState(thread, (s) => s.messages);
+const status = useActorState(thread, (s) => s.status);
 
-// React: selector-based subscriptions
-const messages = useActorState(room, (s) => s.messages);
-const online = useActorState(room, (s) => s.online);
-
-// Multiple actor instances — each with independent state
-const lobby = client.game("lobby");
-const room1 = client.game("room-1");
-const room2 = client.game("room-2");`;
+// Or subscribe to the whole live actor snapshot
+const thread = client.support("thread-42");
+thread.state.subscribe((state) => {
+  console.log(state.messages, state.status);
+});`;
 ---
 
-<section class="flex flex-col gap-5">
-  <header class="flex flex-col">
-    <h1>realtime on <span class="text-emerald-500">steroids</span></h1>
-    <h3 class="max-w-lg">Batteries included. Type-safe by default.</h3>
+<section class="features-section relative flex flex-col">
+  <div class="section-glow bg-primary"></div>
+
+  <header class="reveal flex flex-col">
+    <h1>build the <span class="text-primary">live part</span> of your product</h1>
+    <h3 class="max-w-xl">
+      Zocket is strongest when your app needs a realtime serverless layer that
+      stays live between calls. The runtime keeps policy, method boundaries,
+      and state sync attached to the part of the product that owns them.
+    </h3>
   </header>
 
-  <div class="flex flex-col gap-4">
-    <!-- Middleware -->
-    <div class="flex flex-col gap-4 xl:flex-row">
-      <div class="relative flex flex-col justify-center gap-2 rounded-lg bg-gradient-to-br from-sky-500 to-emerald-500 p-5 xl:w-[340px] xl:shrink-0">
-        <div class="absolute left-1/2 top-full -z-10 h-[200%] w-full -translate-x-1/2 -translate-y-1/2 bg-sky-500 opacity-[15%] blur-[200px]"></div>
-        <div class="flex items-center gap-2.5">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width={1.5} stroke="white" class="h-7 w-7 rounded-md bg-black/20 p-1">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 7.5h-.75A2.25 2.25 0 004.5 9.75v7.5a2.25 2.25 0 002.25 2.25h7.5a2.25 2.25 0 002.25-2.25v-7.5a2.25 2.25 0 00-2.25-2.25h-.75m-6 3.75l3 3m0 0l3-3m-3 3V1.5m6 9h.75a2.25 2.25 0 012.25 2.25v7.5a2.25 2.25 0 01-2.25 2.25h-7.5a2.25 2.25 0 01-2.25-2.25v-.75"></path>
-          </svg>
-          <h2 class="text-white">Middleware</h2>
+  <div class="flex flex-col gap-28 mt-16">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 01 · MIDDLEWARE — "the bouncer"                        -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="reveal feature-block group relative flex flex-col gap-8 xl:flex-row xl:items-start">
+      <div class="relative xl:w-[400px] xl:shrink-0">
+        <span class="feature-num" aria-hidden="true">01</span>
+        <div class="relative z-10 pt-4 xl:pt-8">
+          <span class="feature-tag">policy lives here</span>
+          <h2 class="mt-3 text-2xl font-bold text-white">Put policy next to the live runtime</h2>
+          <p class="mt-3 text-[15px] leading-relaxed text-white/50">
+            Auth, permissions, identity, and request context belong beside the
+            live thing they govern. Zocket lets you gate runtime access and carry
+            typed context into every method without scattering checks across
+            routes and socket handlers.
+          </p>
         </div>
-        <h3 class="text-white/80">
-          Add authentication, logging, and rate limiting with fully type-safe
-          middleware. Context flows through with complete type inference.
-        </h3>
       </div>
       <div class="min-w-0 flex-1">
         <CodeBlock title="middleware.ts" code={middlewareCode} />
       </div>
     </div>
 
-    <!-- Error Handling + Input Validation -->
-    <div class="flex flex-col gap-4 xl:flex-row">
-      <div class="flex flex-col gap-4 xl:w-1/2">
-        <div class="flex flex-col gap-2 rounded-lg bg-gradient-to-tl from-purple-500 to-pink-500 p-5">
-          <div class="absolute-glow absolute left-1/2 top-full -z-10 h-[200%] w-full -translate-x-1/2 -translate-y-1/2 bg-purple-500 opacity-[10%] blur-[200px]"></div>
-          <div class="flex items-center gap-2.5">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width={1.5} stroke="white" class="h-7 w-7 rounded-md bg-black/20 p-1">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"></path>
-            </svg>
-            <h2 class="text-white">Input Validation</h2>
-          </div>
-          <h3 class="text-white/80">
-            Every method input is validated at runtime using Zod schemas. Invalid
-            payloads are rejected before reaching your handler.
-          </h3>
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 02 · VALIDATION — "trust issues (the good kind)"      -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="reveal feature-block group relative flex flex-col gap-8 xl:grid xl:grid-cols-[minmax(0,1.1fr)_380px] xl:gap-12 xl:items-start">
+      <div class="relative order-1 xl:order-2 xl:w-[380px] xl:justify-self-end">
+        <div class="pt-4 xl:pt-8">
+          <span class="feature-tag">safe live calls</span>
+          <h2 class="mt-3 text-2xl font-bold text-white">Make live methods safe to call</h2>
+          <p class="mt-3 text-[15px] leading-relaxed text-white/50">
+            Realtime methods should have real boundaries. Zod validates inputs at
+            runtime, the client inherits the method shape automatically, and
+            server-side failures come back as predictable errors instead of
+            mysterious socket drama.
+          </p>
         </div>
-        <CodeBlock title="client.ts" code={errorClientCode} />
       </div>
-      <div class="flex flex-col gap-4 xl:w-1/2">
-        <CodeBlock title="server.ts" code={errorServerCode} />
-        <div class="flex flex-col gap-2 rounded-lg bg-gradient-to-tl from-indigo-500 to-purple-500 p-5">
-          <div class="flex items-center gap-2.5">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width={1.5} stroke="white" class="h-7 w-7 rounded-md bg-black/20 p-1">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"></path>
-            </svg>
-            <h2 class="text-white">Error Handling</h2>
-          </div>
-          <h3 class="text-white/80">
-            Throw errors from method handlers and catch them on the client.
-            Errors include messages for clean, predictable error handling.
-          </h3>
+      <div class="validation-code-grid order-2 grid min-w-0 gap-4 sm:grid-cols-2 xl:order-1 xl:max-w-[760px] xl:grid-cols-1 2xl:grid-cols-2">
+        <div class="min-w-0">
+          <CodeBlock title="server.ts" code={validationErrorCode} />
+        </div>
+        <div class="min-w-0">
+          <CodeBlock title="client.ts" code={validationErrorClientCode} />
         </div>
       </div>
     </div>
 
-    <!-- State Subscriptions -->
-    <div class="flex flex-col gap-4 xl:flex-row">
-      <div class="relative flex flex-col justify-center gap-2 rounded-lg bg-gradient-to-tl from-cyan-500 to-blue-500 p-5 xl:w-[340px] xl:shrink-0">
-        <div class="absolute left-1/2 top-full -z-10 h-[200%] w-full -translate-x-1/2 -translate-y-1/2 bg-blue-500 opacity-[15%] blur-[200px]"></div>
-        <div class="flex items-center gap-2.5">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width={1.5} stroke="white" class="h-7 w-7 rounded-md bg-black/20 p-1">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"></path>
-          </svg>
-          <h2 class="text-white">State Subscriptions</h2>
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- 03 · STATE SUBSCRIPTIONS — "selective hearing"         -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="reveal feature-block group relative flex flex-col gap-8 xl:flex-row xl:items-start">
+      <div class="relative xl:w-[400px] xl:shrink-0">
+        <span class="feature-num" aria-hidden="true">03</span>
+        <div class="relative z-10 pt-4 xl:pt-8">
+          <span class="feature-tag">stay in sync</span>
+          <h2 class="mt-3 text-2xl font-bold text-white">Keep clients attached to the right state</h2>
+          <p class="mt-3 text-[15px] leading-relaxed text-white/50">
+            Rooms, threads, and sessions are only useful if the client can stay
+            current without custom rebroadcast logic. Subscribe to the live runtime,
+            select the slice you care about, and let the runtime handle the
+            boring sync machinery.
+          </p>
         </div>
-        <h3 class="text-white/80">
-          Subscribe to actor state with fine-grained selectors. Components only
-          re-render when the slice they care about changes.
-        </h3>
       </div>
       <div class="min-w-0 flex-1">
         <CodeBlock title="state.ts" code={stateCode} />
       </div>
     </div>
+
   </div>
 </section>
+
+<style>
+  /* ── Big outline numbers ─────────────────────────────── */
+  .feature-num {
+    position: absolute;
+    bottom: -1.5rem;
+    right: -0.5rem;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10rem;
+    font-weight: 800;
+    line-height: 1;
+    color: transparent;
+    -webkit-text-stroke: 1px rgba(255, 255, 255, 0.03);
+    z-index: 0;
+    pointer-events: none;
+    user-select: none;
+    overflow: hidden;
+    transition: -webkit-text-stroke-color 0.5s ease;
+  }
+
+  /* Clip the number inside the text column */
+  .feature-block > div:first-child {
+    overflow: hidden;
+  }
+
+  .feature-block:hover .feature-num {
+    -webkit-text-stroke-color: rgba(249, 115, 22, 0.08);
+  }
+
+  /* ── Fun pill tags ───────────────────────────────────── */
+  .feature-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 14px;
+    border-radius: 999px;
+    border: 1px solid hsl(30 100% 50% / 0.2);
+    background: hsl(30 100% 50% / 0.06);
+    color: hsl(30 100% 58%);
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    transition: all 0.3s ease;
+  }
+
+  .feature-block:hover .feature-tag {
+    border-color: hsl(30 100% 50% / 0.4);
+    background: hsl(30 100% 50% / 0.1);
+    box-shadow: 0 0 20px hsl(30 100% 50% / 0.08);
+  }
+
+  /* ── Inline code in descriptions ─────────────────────── */
+  .inline-code {
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 2px 7px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 12px;
+    color: hsl(30 100% 65%);
+  }
+
+  /* ── Responsive ──────────────────────────────────────── */
+  @media (max-width: 1279px) {
+    .feature-num {
+      font-size: 7rem;
+      top: -1.5rem;
+    }
+  }
+</style>

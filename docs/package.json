@@ -6,13 +6,14 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "deploy": "astro build && wrangler pages deploy ./dist --project-name zocket-docs"
+    "deploy": "astro build && wrangler pages deploy"
   },
   "dependencies": {
     "@astrojs/react": "^5.0.0",
     "@astrojs/starlight": "^0.38.1",
     "@astrojs/starlight-tailwind": "2",
     "@astrojs/tailwind": "5",
+    "@fontsource-variable/bricolage-grotesque": "^5.2.10",
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@hookform/resolvers": "^5.2.2",

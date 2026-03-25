@@ -21,10 +21,25 @@ import Footer from "./components/footer.astro";
     <title>Zocket</title>
   </head>
   <body class="flex min-h-screen flex-col font-sans">
+    <div class="noise-overlay" aria-hidden="true"></div>
     <Navbar />
     <div class="mx-auto w-full max-w-[1200px] flex-1 px-6">
       <slot />
     </div>
     <Footer />
+
+    <script>
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("visible");
+            }
+          });
+        },
+        { threshold: 0.08, rootMargin: "0px 0px -40px 0px" }
+      );
+      document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+    </script>
   </body>
 </html>

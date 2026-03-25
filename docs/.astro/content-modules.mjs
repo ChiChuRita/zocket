@@ -20,8 +20,10 @@ export default new Map([
 ["src/content/docs/motivation/type-safety.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fmotivation%2Ftype-safety.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/react/hooks.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Freact%2Fhooks.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/react/setup.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Freact%2Fsetup.mdx&astroContentModuleFlag=true")],
+["src/content/docs/roadmap.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Froadmap.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/server/bun-adapter.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fserver%2Fbun-adapter.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/server/custom-handlers.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fserver%2Fcustom-handlers.mdx&astroContentModuleFlag=true")],
 ["src/content/docs/server/deno-adapter.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fserver%2Fdeno-adapter.mdx&astroContentModuleFlag=true")],
-["src/content/docs/server/node-adapter.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fserver%2Fnode-adapter.mdx&astroContentModuleFlag=true")]]);
+["src/content/docs/server/node-adapter.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fserver%2Fnode-adapter.mdx&astroContentModuleFlag=true")],
+["src/content/docs/use-cases.mdx", () => import("astro:content-layer-deferred-module?astro%3Acontent-layer-deferred-module=&fileName=src%2Fcontent%2Fdocs%2Fuse-cases.mdx&astroContentModuleFlag=true")]]);
 		

@@ -1,0 +1,20 @@
+---
+import { ComparisonShowcase } from "../components/comparison-showcase";
+---
+
+<section class="relative flex flex-col gap-8">
+  <div class="section-glow bg-primary"></div>
+
+  <header class="reveal flex flex-col gap-3">
+    <h2 class="text-3xl font-bold tracking-tight text-white md:text-4xl">
+      See the <span class="text-primary">difference</span>
+    </h2>
+    <p class="max-w-2xl text-base text-white/50 md:text-lg">
+      Same feature, different tools. Click a tab to compare.
+    </p>
+  </header>
+
+  <div class="reveal">
+    <ComparisonShowcase client:visible />
+  </div>
+</section>

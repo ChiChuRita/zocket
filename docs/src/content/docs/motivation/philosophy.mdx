@@ -5,12 +5,73 @@ sidebar:
   order: 1
 ---
 
-Zocket exists because building realtime apps in TypeScript still usually means choosing between two bad options:
+Zocket is built on a simple idea:
 
-- use a raw WebSocket and hand-roll your own protocol, state sync, and concurrency model
-- use an event-driven library that improves ergonomics a bit, but still leaves your actual application structure up to you
+The core units of many modern apps are live, stateful actors.
 
-That gets a basic demo working, but it does not age well.
+Chats, agents, rooms, sessions, documents, matches, and workflows all have identity, behavior, changing state, and clients connected to them in realtime. Zocket exists to make those things first-class instead of forcing them through stateless APIs plus an ad hoc websocket layer.
+
+That is the philosophical distinction behind the rest of the library. Zocket is not just "websocket infrastructure." It is an application model for building products around live entities.
+
+## The Core Idea
+
+Zocket is for building products around long-lived, stateful actors.
+
+Not just sending messages over a socket, but modeling things like:
+
+- chat threads
+- AI agent sessions
+- collaborative rooms
+- support conversations
+- multiplayer matches
+- workflow runs
+
+as entities with:
+
+- identity
+- state
+- behavior
+- subscriptions
+
+In Zocket, the unit you build around is not an endpoint. It is an actor instance clients can talk to directly.
+
+## Build Around Actors, Not Endpoints
+
+Traditional backend design starts with routes, handlers, and stateless requests.
+
+Zocket starts with entities that live.
+
+A chat thread, AI agent, room, document, or multiplayer match is not just a collection of API calls. It has ongoing state, methods that mutate that state, and connected clients that need to stay in sync.
+
+So Zocket treats those things as first-class:
+
+- you talk to an actor
+- you invoke typed methods on it
+- you subscribe to its state
+- you keep logic attached to the entity that owns it
+
+That makes the mental model closer to product building blocks than to "servers that happen to hold sockets."
+
+## Why Zocket Exists
+
+Modern realtime apps are rarely just about transport.
+
+The hard part is expressing live application state in a way that feels natural to build, reason about, and evolve over time.
+
+Without a stronger abstraction, teams usually end up stitching together three separate concerns:
+
+- request handlers or RPC endpoints
+- websocket plumbing
+- client-side state management and sync logic
+
+That can get a demo working, but it usually turns product concepts into glue code.
+
+Zocket exists to make realtime systems feel like application development again:
+
+- typed
+- stateful
+- composable
+- direct
 
 ## The Problems Zocket Cares About
 
@@ -63,6 +124,19 @@ Once an app grows beyond a few messages, you need a clear answer to questions li
 
 Zocket's answer is: make that unit explicit.
 
+## What Zocket Is Not
+
+Zocket is not:
+
+- a thin websocket transport layer
+- a generic pub/sub utility
+- a bag of event handlers with better autocomplete
+- a product optimized primarily around raw connection management
+
+Zocket is optimized around stateful actors that clients can talk to in realtime.
+
+If you think in terms of rooms, agents, sessions, threads, documents, or matches, you are probably already thinking in Zocket's model.
+
 ## The Design Principles
 
 ### Define once, infer everywhere
@@ -87,23 +161,23 @@ A realtime app is usually made from many isolated stateful things. The runtime s
 
 ### Prefer local reasoning
 
-The more logic you can keep attached to one room, one document, or one match, the easier it is to understand, test, and operate.
+The more logic you can keep attached to one room, one document, one agent, or one match, the easier it is to understand, test, and operate.
 
-## What Zocket Is Trying To Feel Like
+## Why Not Just Combine REST, WebSockets, And Client State Yourself?
 
-Not:
+You can.
 
-- a thin transport wrapper
-- a generic pub/sub utility
-- a bag of event handlers with better autocomplete
+Zocket exists because that stack often turns one product concept into three separate technical systems:
 
-But:
+- an API surface for mutations
+- a websocket channel for updates
+- a client-side state layer to stitch everything back together
 
-- an application runtime for stateful realtime units
-- with typed methods
-- built-in state sync
-- and clear ownership over where logic lives
+Zocket compresses those into one abstraction:
 
-That is why the rest of the library looks the way it does.
+- a direct client-to-actor model
+- typed methods and state
+- built-in subscriptions and sync
+- less glue code between product ideas and implementation
 
 If you want the deeper reasoning behind the core abstraction, continue to [Why Actors](/motivation/actors/).

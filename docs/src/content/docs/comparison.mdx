@@ -3,7 +3,9 @@ title: Comparison
 description: How Zocket compares to Socket.io, PartyKit, Convex, Liveblocks, and others.
 ---
 
-Every tool in this space makes different tradeoffs. Here's an honest look at when you'd pick each one — and when you wouldn't.
+Every tool in this space makes different tradeoffs. Here's an honest look at when you'd pick each one, and where Zocket is meaningfully different.
+
+Zocket is strongest when your product is made of live entities that clients interact with directly: chats, agents, rooms, sessions, workflows, documents, or matches. If that is not the shape of your app, another tool may fit better.
 
 ## Socket.io
 
@@ -142,3 +144,14 @@ Managed pub/sub messaging platforms.
 - **You need realtime updates from Postgres changes** — use Supabase Realtime
 - **You need global pub/sub with delivery guarantees** — use Ably or Pusher
 - **Your app is purely request/response** — use tRPC
+
+## When Zocket Is The Right Fit
+
+Pick Zocket when:
+
+- your product is built around live stateful entities instead of mostly stateless endpoints
+- clients need to call methods on those entities directly
+- state subscriptions are part of the product, not an afterthought
+- you want one abstraction instead of stitching together RPC, socket events, and client sync manually
+
+That is the core distinction: Zocket is not primarily a transport choice. It is an application model for realtime actors.

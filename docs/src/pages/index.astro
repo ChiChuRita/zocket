@@ -1,17 +1,21 @@
 ---
 import Layout from "../landing/layout.astro";
 import Hero from "../landing/sections/hero.astro";
+import UseCases from "../landing/sections/use-cases.astro";
 import EndToEnd from "../landing/sections/end-to-end-typesafety.astro";
 import Features from "../landing/sections/features.astro";
+import Comparisons from "../landing/sections/comparisons.astro";
 import Faq from "../landing/sections/faq.astro";
 import Cta from "../landing/sections/cta.astro";
 ---
 
 <Layout>
-  <main class="flex flex-col gap-20 py-16">
+  <main class="flex flex-col gap-24 py-20 md:gap-32 md:py-24">
     <Hero />
+    <UseCases />
     <EndToEnd />
     <Features />
+    <Comparisons />
     <Cta />
     <Faq />
   </main>

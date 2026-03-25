@@ -5,6 +5,10 @@ description: Install Zocket and build your first realtime actor in minutes.
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
+Zocket is strongest when your product is made of live entities clients interact with directly: chats, agents, sessions, rooms, workflows, or collaborative objects.
+
+This quickstart uses a chat room, but the mental model is the same for an AI agent thread, a multiplayer lobby, or a support conversation: define the actor, give it typed methods and state, then let clients call it and subscribe to it.
+
 ## Installation
 
 <Tabs>
@@ -26,9 +30,9 @@ For React integration, also add `@zocket/react`:
 bun add @zocket/react
 ```
 
-## 1. Define an Actor
+## 1. Define a Live Actor
 
-Actors are stateful units with typed methods, events, and lifecycle hooks.
+Actors are stateful units with identity, typed methods, state, events, and lifecycle hooks.
 
 ```ts
 // chat.ts
@@ -56,7 +60,7 @@ const ChatRoom = actor({
 export const app = createApp({ actors: { chat: ChatRoom } });
 ```
 
-## 2. Serve It
+## 2. Serve the Actor
 
 ```ts
 // server.ts
@@ -67,7 +71,7 @@ const server = serve(app, { port: 3000 });
 console.log(`Zocket on ws://localhost:${server.port}`);
 ```
 
-## 3. Connect a Client
+## 3. Connect a Client to It
 
 ```ts
 // client.ts
@@ -76,7 +80,7 @@ import type { app } from "./chat";
 
 const client = createClient<typeof app>({ url: "ws://localhost:3000" });
 
-// Get a typed handle for a specific actor instance
+// Get a typed handle for a specific live actor instance
 const room = client.chat("general");
 
 // Call methods — fully typed
@@ -131,6 +135,7 @@ export function App() {
 
 ## Next Steps
 
+- [Use Cases](/use-cases/) — where Zocket fits best: chats, agents, workflows, rooms, and collaborative state
 - [Motivation](/motivation/) — why Zocket is structured this way
 - [Why Actors](/motivation/actors/) — the conceptual model behind actor-based realtime code
 - [Actors](/core/actors/) — full API for state, methods, events, and lifecycle hooks

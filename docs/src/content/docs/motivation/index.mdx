@@ -7,13 +7,14 @@ sidebar:
 
 Zocket is opinionated on purpose.
 
-It does not try to be a thin WebSocket wrapper or a generic event bus. It assumes that most realtime applications are built from long-lived, stateful things like rooms, matches, documents, boards, and presence channels, and it gives those things a first-class shape.
+It does not try to be a thin WebSocket wrapper or a generic event bus. It assumes that many realtime products are built from long-lived, stateful things like chats, agents, rooms, matches, documents, boards, and sessions, and it gives those things a first-class shape.
 
 This section explains the thinking behind that design.
 
 ## Read This Section If You Want To Understand...
 
 - why Zocket is not just `socket.on("event")` with better TypeScript
+- why Zocket is better understood as an application model, not just transport
 - why state sync is built in instead of left to app code
 - why the core abstraction is an actor instead of a flat message router
 - what kinds of realtime systems Zocket is actually optimized for
@@ -29,7 +30,7 @@ This section explains the thinking behind that design.
 
 Zocket is built around a simple belief:
 
-Realtime applications are usually collections of isolated stateful things, not a flat stream of unrelated socket messages.
+Realtime applications are usually collections of live product entities, not a flat stream of unrelated socket messages.
 
 Once you accept that, a lot of the API shape follows naturally:
 

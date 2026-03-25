@@ -1,0 +1,85 @@
+---
+title: Use Cases
+description: The kinds of products Zocket is built for.
+---
+
+Zocket is strongest when your app is made of live entities clients interact with directly.
+
+If you naturally think in terms of actors with identity, behavior, state, and subscriptions, Zocket is probably a good fit.
+
+## Chat And Messaging
+
+Chat threads, support conversations, group channels, and DMs all map naturally to actors.
+
+Each thread has:
+
+- an identity
+- a message history or derived state
+- methods like `sendMessage`, `markRead`, or `rename`
+- clients subscribed to updates in realtime
+
+This is where Zocket feels more natural than stitching together REST mutations, websocket events, and client-side caches by hand.
+
+## AI Agents
+
+Agent sessions and threads are a strong fit for Zocket's model.
+
+An agent is not just a stream of tokens. It usually has:
+
+- an identity
+- mutable session state
+- tools or methods it can invoke
+- subscribers watching progress in realtime
+
+That makes the actor model a better fit than a flat API plus a side channel for live updates.
+
+## Realtime Workflows
+
+Some workflows behave like long-lived entities:
+
+- order fulfillment sessions
+- onboarding flows
+- approval chains
+- background jobs with live progress
+
+When users need to see status, invoke actions, and stay synced to a running process, modeling that workflow as an actor keeps the logic and the state in one place.
+
+## Multiplayer And Rooms
+
+Rooms, lobbies, matches, and shared game state are classic actor-shaped problems.
+
+They have:
+
+- sequential actions
+- shared mutable state
+- multiple clients connected at once
+- a clear unit of coordination
+
+This is one of the most direct fits for Zocket.
+
+## Collaborative State
+
+Some products revolve around shared live objects:
+
+- documents
+- whiteboards
+- boards
+- sessions
+- shared controls
+
+If your frontend needs a typed handle to a live object and a clean way to subscribe to its changing state, Zocket gives that object a direct runtime shape.
+
+## When Zocket Is Probably Not The Right Tool
+
+Zocket is a weaker fit when:
+
+- your app is mostly request/response CRUD
+- realtime is only occasional notifications
+- you mainly need message transport, not stateful server-side entities
+- your strongest abstraction is database rows or pub/sub channels rather than live actors
+
+In those cases, tools centered on REST, reactive queries, or pub/sub may be simpler.
+
+## The Short Rule
+
+If the core units of your product sound like chats, agents, sessions, rooms, workflows, documents, or matches, you are probably already thinking in Zocket's model.

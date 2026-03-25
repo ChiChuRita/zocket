@@ -15,15 +15,10 @@ const ChatRoom = actor({
   methods: {
     sendMessage: {
       input: z.object({ from: z.string(), text: z.string() }),
-      handler: ({ state, input, emit }) => {
+      handler: ({ state, input }) => {
         state.messages.push(input);
-        emit("newMessage", input);
       },
     },
-  },
-
-  events: {
-    newMessage: z.object({ from: z.string(), text: z.string() }),
   },
 });
 
@@ -40,31 +35,71 @@ const room = client.chat("general");
 
 await room.sendMessage({ from: "Alice", text: "Hi!" });
 
-room.state.subscribe((s) => {
-  console.log(s.messages); // fully typed
-});`;
+console.log(room.state.messages); // fully typed`;
 ---
 
-<section class="relative flex flex-col gap-5">
-  <div
-    class="absolute left-1/2 top-1/2 -z-10 h-full w-full -translate-x-1/2 -translate-y-1/2 bg-[#0f9fff] opacity-20 blur-[200px] xl:opacity-10"
-  >
-  </div>
-  <header class="flex flex-col">
+<section class="relative flex flex-col gap-5 pb-24 md:pb-32 xl:pb-40">
+  <div class="section-glow bg-blue-400"></div>
+  <header class="reveal flex flex-col">
+    <span class="feature-pill mb-2 w-fit border border-blue-400/20 bg-blue-400/8 px-4 py-1 text-[11px] font-mono uppercase tracking-[0.16em] text-blue-300/80">
+      one definition
+    </span>
     <h1>
-      end-to-end
-      <span class="text-[#0f9fff]">typesafety</span>
+      the wire is not
+      <span class="text-blue-400">a second API</span>
     </h1>
     <h3 class="max-w-lg">
-      With Zocket, your actor state, methods, and events are fully typed from
-      server to client using <a
-        class="font-medium text-[#0f9fff] hover:underline"
+      Define the actor on the server, then let the client inherit its shape.
+      Zocket uses <a
+        class="font-medium text-blue-400 hover:underline"
         href="https://zod.dev/">Zod</a
-      > schemas. Never worry about sending the wrong data again.
+      > schemas to infer and validate methods, state, and subscriptions, so you
+      stop maintaining a second contract just to talk to the live part of your
+      product.
     </h3>
   </header>
-  <div class="flex flex-col gap-4 xl:flex-row">
-    <CodeBlock title="server.ts" code={serverCode} />
-    <CodeBlock title="client.ts" code={clientCode} />
+  <div class="reveal relative flex flex-col gap-5 xl:flex-row xl:items-stretch xl:gap-6">
+    <div class="flex-1 min-w-0">
+      <CodeBlock title="server.ts" code={serverCode} />
+    </div>
+
+    <!-- Type flow connector -->
+    <div class="type-flow hidden xl:flex flex-col items-center justify-center gap-3 py-8">
+      <div class="flex items-center gap-1.5 rounded-full border border-blue-400/20 bg-blue-400/5 px-3 py-1">
+        <svg class="h-3.5 w-3.5 text-blue-400 type-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+        </svg>
+        <span class="font-mono text-[10px] tracking-wider text-blue-400/70 uppercase">inferred + validated</span>
+      </div>
+      <div class="h-full w-px bg-gradient-to-b from-transparent via-blue-400/40 to-transparent"></div>
+    </div>
+
+    <!-- Mobile flow arrow -->
+    <div class="flex xl:hidden items-center justify-center py-1">
+      <div class="flex items-center gap-1.5 rounded-full border border-blue-400/20 bg-blue-400/5 px-3 py-1">
+        <svg class="h-3.5 w-3.5 text-blue-400 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+        </svg>
+        <span class="font-mono text-[10px] tracking-wider text-blue-400/70 uppercase">inferred + validated</span>
+      </div>
+    </div>
+
+    <div class="flex-1 min-w-0">
+      <CodeBlock title="client.ts" code={clientCode} />
+    </div>
   </div>
 </section>
+
+<style>
+  .feature-pill {
+    border-radius: 999px;
+  }
+
+  @keyframes nudge-right {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(3px); }
+  }
+  .type-arrow {
+    animation: nudge-right 2s ease-in-out infinite;
+  }
+</style>

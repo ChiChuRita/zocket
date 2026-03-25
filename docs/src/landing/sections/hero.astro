@@ -2,24 +2,24 @@
 import { Button } from "../components/ui/button";
 ---
 
-<section class="flex flex-row items-center justify-between overflow-visible">
-  <header class="relative flex flex-col gap-2">
-    <div
-      class="bg-primary absolute left-1/2 top-1/2 -z-10 h-full w-full -translate-x-1/2 -translate-y-1/2 opacity-[15%] blur-[100px] xl:opacity-10"
-    >
-    </div>
+<section class="relative flex flex-row items-center justify-between overflow-visible">
+  <div class="dot-grid pointer-events-none absolute inset-0 -z-20 opacity-60"></div>
+  <header class="hero-stagger relative flex flex-col gap-1.5">
     <h1>
-      typed <span class="text-primary">actors</span>
-      <br /> for realtime apps
+      realtime <span class="text-primary">serverless</span>
+      <br /> for chats, agents, and rooms
     </h1>
     <h3 class="max-w-lg">
-      Define stateful actors with typed methods, events, and state — then call
-      them from any client with full end-to-end type safety over WebSockets.
+      Build chats, agents, sessions, workflows, and collaborative objects on a
+      typed realtime runtime that keeps live state, method calls, and
+      subscriptions in sync. Zocket gives you a cleaner serverless model for
+      the realtime part of your app instead of stitching together REST,
+      sockets, and client-side sync.
     </h3>
-    <div class="flex flex-row gap-4">
+    <div class="flex flex-row gap-4 pt-2">
       <a href="/getting-started/" class="w-fit">
         <Button
-          className="w-fit xl:text-lg px-4 xl:px-8"
+          className="w-fit text-base px-6"
           size="lg"
         >
           Get Started
@@ -28,16 +28,27 @@ import { Button } from "../components/ui/button";
       <a href="https://github.com/ChiChuRita/zocket" class="flex w-fit">
         <Button
           variant={"secondary"}
-          className="w-fit text-lg flex gap-3 px-4 xl:px-8"
+          className="w-fit text-base flex gap-3 px-6"
           size="lg"
         >
           <img src="/github-mark-white.svg" class="w-6" alt="Github logo" />
-          zocket
+          GitHub
         </Button>
       </a>
     </div>
+    <p class="max-w-xl pt-2 text-sm text-white/45 md:text-[15px]">
+      Define the live backend once, call typed methods from clients, and
+      subscribe to state changes without building three separate systems just
+      to ship one realtime feature.
+    </p>
+    <!-- npm install one-liner for mobile -->
+    <div class="mt-3 flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-4 py-2 font-mono text-xs text-white/40 xl:hidden">
+      <span class="text-primary/60">$</span>
+      <span>bun add @zocket/core @zocket/client zod</span>
+    </div>
   </header>
   <div class="relative flex w-fit pr-0 md:pr-20 xl:pr-20">
+    <div class="section-glow bg-primary"></div>
     <img
       src="/sock2.svg"
       alt="left sock"

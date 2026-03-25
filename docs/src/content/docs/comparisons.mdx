@@ -1,0 +1,709 @@
+---
+title: Zocket vs Others
+description: Side-by-side code comparisons showing how Zocket's actor model compares to Socket.io, Liveblocks, Rivet, and Temporal.
+---
+
+Real code comparisons. Each section builds the same feature in both tools so you can see the difference for yourself.
+
+---
+
+## Socket.io vs Zocket — Chat Room
+
+A chat room with message history and online presence. Socket.io's bread and butter.
+
+### Socket.io
+
+**Server** — manage rooms, track users, broadcast manually:
+
+```ts
+// server.ts
+import { Server } from "socket.io";
+
+const io = new Server(3000);
+
+// In-memory state (you manage this yourself)
+const rooms = new Map<string, {
+  messages: { from: string; text: string }[];
+  online: Set<string>;
+}>();
+
+function getRoom(id: string) {
+  if (!rooms.has(id)) {
+    rooms.set(id, { messages: [], online: new Set() });
+  }
+  return rooms.get(id)!;
+}
+
+io.on("connection", (socket) => {
+  let currentRoom: string | null = null;
+  let username: string | null = null;
+
+  socket.on("join", ({ room, name }) => {
+    currentRoom = room;
+    username = name;
+    socket.join(room);
+
+    const r = getRoom(room);
+    r.online.add(name);
+
+    // Send history to this client
+    socket.emit("history", r.messages);
+
+    // Tell everyone else
+    io.to(room).emit("presence", [...r.online]);
+  });
+
+  socket.on("sendMessage", ({ text }) => {
+    if (!currentRoom || !username) return;
+    const r = getRoom(currentRoom);
+    const msg = { from: username, text };
+    r.messages.push(msg);
+
+    // Broadcast to room
+    io.to(currentRoom).emit("newMessage", msg);
+  });
+
+  socket.on("disconnect", () => {
+    if (!currentRoom || !username) return;
+    const r = getRoom(currentRoom);
+    r.online.delete(username);
+    io.to(currentRoom).emit("presence", [...r.online]);
+  });
+});
+```
+
+**Client** — wire up events manually, no types:
+
+```ts
+// client.ts
+import { io } from "socket.io-client";
+
+const socket = io("http://localhost:3000");
+
+socket.emit("join", { room: "general", name: "Alice" });
+
+socket.on("history", (messages) => {
+  // messages is `any` — no type inference
+  console.log(messages);
+});
+
+socket.on("newMessage", (msg) => {
+  // msg is `any`
+  console.log(msg.from, msg.text);
+});
+
+socket.on("presence", (users) => {
+  // users is `any`
+  console.log("Online:", users);
+});
+
+socket.emit("sendMessage", { text: "Hello!" });
+```
+
+### Zocket
+
+**Server** — one actor definition, state sync is automatic:
+
+```ts
+// chat.ts
+import { z } from "zod";
+import { actor, createApp } from "@zocket/core";
+import { serve } from "@zocket/server/bun";
+
+const ChatRoom = actor({
+  state: z.object({
+    messages: z.array(z.object({
+      from: z.string(),
+      text: z.string(),
+    })).default([]),
+    online: z.array(z.string()).default([]),
+  }),
+
+  methods: {
+    join: {
+      input: z.object({ name: z.string() }),
+      handler: ({ state, input }) => {
+        if (!state.online.includes(input.name)) {
+          state.online.push(input.name);
+        }
+      },
+    },
+    sendMessage: {
+      input: z.object({ from: z.string(), text: z.string() }),
+      handler: ({ state, input }) => {
+        state.messages.push(input);
+      },
+    },
+  },
+
+  onDisconnect({ state, connectionId }) {
+    const idx = state.online.indexOf(connectionId);
+    if (idx !== -1) state.online.splice(idx, 1);
+  },
+});
+
+const app = createApp({ actors: { chat: ChatRoom } });
+serve(app, { port: 3000 });
+```
+
+**Client** — fully typed, state syncs automatically:
+
+```ts
+// client.ts
+import { createClient } from "@zocket/client";
+import type { app } from "./chat";
+
+const client = createClient<typeof app>({ url: "ws://localhost:3000" });
+const room = client.chat("general");
+
+// State syncs automatically — snapshot on subscribe, patches on change
+room.state.subscribe((state) => {
+  console.log(state.messages);  // typed: { from: string; text: string }[]
+  console.log("Online:", state.online);  // typed: string[]
+});
+
+await room.join({ name: "Alice" });
+await room.sendMessage({ from: "Alice", text: "Hello!" });
+```
+
+### What's different
+
+Socket.io gives you a transport layer — you build the state management, room logic, presence tracking, serialization, and client-side event wiring yourself. Every event is `any`. State lives in a Map you manage.
+
+Zocket gives you the whole stack. Define state and methods once. State syncs to clients as JSON patches. Types flow from server to client. Presence is just state. No manual broadcasting.
+
+---
+
+## Liveblocks vs Zocket — Collaborative Cursors
+
+A shared workspace where users see each other's cursor positions in real-time. Liveblocks's core use case.
+
+### Liveblocks
+
+**Server** — configure via dashboard or API key:
+
+```ts
+// No server code — Liveblocks is a hosted service.
+// You configure rooms in their dashboard and use their client SDK.
+```
+
+**Client** — their hooks manage presence:
+
+```tsx
+// app.tsx
+import { LiveblocksProvider, RoomProvider, useOthers, useUpdateMyPresence } from "@liveblocks/react";
+
+// Liveblocks config (API key, room setup)
+const client = createClient({
+  publicApiKey: "pk_live_xxx", // vendor API key
+});
+
+function Cursors() {
+  const others = useOthers();
+  const updatePresence = useUpdateMyPresence();
+
+  // Track mouse position
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      updatePresence({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener("mousemove", handler);
+    return () => window.removeEventListener("mousemove", handler);
+  }, []);
+
+  return (
+    <>
+      {others.map(({ connectionId, presence }) => (
+        <div
+          key={connectionId}
+          style={{
+            position: "absolute",
+            left: presence.x ?? 0,
+            top: presence.y ?? 0,
+          }}
+        >
+          Cursor {connectionId}
+        </div>
+      ))}
+    </>
+  );
+}
+
+function App() {
+  return (
+    <LiveblocksProvider client={client}>
+      <RoomProvider id="my-room" initialPresence={{ x: 0, y: 0 }}>
+        <Cursors />
+      </RoomProvider>
+    </LiveblocksProvider>
+  );
+}
+```
+
+### Zocket
+
+**Server** — self-hosted, you own the data:
+
+```ts
+// cursors.ts
+import { z } from "zod";
+import { actor, createApp } from "@zocket/core";
+import { serve } from "@zocket/server/bun";
+
+const Workspace = actor({
+  state: z.object({
+    cursors: z.record(z.object({
+      x: z.number(),
+      y: z.number(),
+      name: z.string(),
+    })).default({}),
+  }),
+
+  methods: {
+    updateCursor: {
+      input: z.object({ x: z.number(), y: z.number(), name: z.string() }),
+      handler: ({ state, input, connectionId }) => {
+        state.cursors[connectionId] = input;
+      },
+    },
+  },
+
+  onDisconnect({ state, connectionId }) {
+    delete state.cursors[connectionId];
+  },
+});
+
+const app = createApp({ actors: { workspace: Workspace } });
+serve(app, { port: 3000 });
+```
+
+**Client** — same React hooks pattern, self-hosted:
+
+```tsx
+// app.tsx
+import { createClient } from "@zocket/client";
+import { createZocketReact } from "@zocket/react";
+import type { app } from "./cursors";
+
+const client = createClient<typeof app>({ url: "ws://localhost:3000" });
+const { ZocketProvider, useActor, useActorState } = createZocketReact<typeof app>();
+
+function Cursors() {
+  const workspace = useActor("workspace", "main");
+  const cursors = useActorState(workspace, (s) => s.cursors);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      workspace.updateCursor({ x: e.clientX, y: e.clientY, name: "Alice" });
+    };
+    window.addEventListener("mousemove", handler);
+    return () => window.removeEventListener("mousemove", handler);
+  }, []);
+
+  return (
+    <>
+      {Object.entries(cursors ?? {}).map(([id, cursor]) => (
+        <div
+          key={id}
+          style={{
+            position: "absolute",
+            left: cursor.x,
+            top: cursor.y,
+          }}
+        >
+          {cursor.name}
+        </div>
+      ))}
+    </>
+  );
+}
+
+function App() {
+  return (
+    <ZocketProvider client={client}>
+      <Cursors />
+    </ZocketProvider>
+  );
+}
+```
+
+### What's different
+
+Liveblocks is a hosted service with a polished API. The DX is good — but you're sending your data through their servers, paying per-connection pricing, and locked into their presence model.
+
+Zocket gives you the same real-time cursor experience, self-hosted. You own the server, the data, and the infrastructure. The code is nearly the same length. The actor definition gives you more flexibility — cursors is just state, so you can add any other shared state (selections, tool modes, document content) to the same actor.
+
+---
+
+## Rivet vs Zocket — Multiplayer Game Match
+
+A game where players join a lobby, the match starts, and the server manages rounds. Rivet is an actor-based platform, so this is a fair fight.
+
+### Rivet
+
+**Server** — define an actor with Rivet's SDK, deploy to their infrastructure:
+
+```ts
+// match.ts
+import { Actor } from "@rivet-gg/actor";
+
+class MatchActor extends Actor<{
+  players: { id: string; score: number }[];
+  phase: "lobby" | "playing" | "finished";
+  round: number;
+}> {
+  override initialize() {
+    return {
+      players: [],
+      phase: "lobby" as const,
+      round: 0,
+    };
+  }
+
+  join(rpc: Rpc, playerId: string) {
+    this.state.players.push({ id: playerId, score: 0 });
+    this.broadcast("playerJoined", { playerId });
+  }
+
+  startRound(rpc: Rpc) {
+    this.state.phase = "playing";
+    this.state.round += 1;
+    this.broadcast("roundStarted", { round: this.state.round });
+  }
+
+  submitAnswer(rpc: Rpc, playerId: string, correct: boolean) {
+    const player = this.state.players.find((p) => p.id === playerId);
+    if (player && correct) player.score += 10;
+    this.broadcast("scoreUpdate", { players: this.state.players });
+  }
+
+  endRound(rpc: Rpc) {
+    this.state.phase = "finished";
+    this.broadcast("roundEnded", { scores: this.state.players });
+  }
+}
+
+export default { actors: { match: MatchActor } };
+```
+
+**Client** — Rivet's client SDK:
+
+```ts
+// client.ts
+import { Client } from "@rivet-gg/actor-client";
+
+const client = new Client("https://your-rivet-project.rivet.gg");
+const match = await client.get({ name: "match", id: "match-123" });
+
+match.on("playerJoined", (data) => {
+  // data is loosely typed
+  console.log(data.playerId);
+});
+
+match.on("scoreUpdate", (data) => {
+  console.log(data.players);
+});
+
+await match.join("player-1");
+await match.startRound();
+await match.submitAnswer("player-1", true);
+```
+
+### Zocket
+
+**Server** — same concept, typed end-to-end:
+
+```ts
+// match.ts
+import { z } from "zod";
+import { actor, createApp } from "@zocket/core";
+import { serve } from "@zocket/server/bun";
+
+const Player = z.object({ id: z.string(), score: z.number() });
+
+const Match = actor({
+  state: z.object({
+    players: z.array(Player).default([]),
+    phase: z.enum(["lobby", "playing", "finished"]).default("lobby"),
+    round: z.number().default(0),
+  }),
+
+  methods: {
+    join: {
+      input: z.object({ playerId: z.string() }),
+      handler: ({ state, input }) => {
+        state.players.push({ id: input.playerId, score: 0 });
+      },
+    },
+    startRound: {
+      handler: ({ state }) => {
+        state.phase = "playing";
+        state.round += 1;
+      },
+    },
+    submitAnswer: {
+      input: z.object({ playerId: z.string(), correct: z.boolean() }),
+      handler: ({ state, input }) => {
+        const player = state.players.find((p) => p.id === input.playerId);
+        if (player && input.correct) player.score += 10;
+      },
+    },
+    endRound: {
+      handler: ({ state }) => {
+        state.phase = "finished";
+      },
+    },
+  },
+});
+
+const app = createApp({ actors: { match: Match } });
+serve(app, { port: 3000 });
+```
+
+**Client** — fully typed from the actor definition:
+
+```ts
+// client.ts
+import { createClient } from "@zocket/client";
+import type { app } from "./match";
+
+const client = createClient<typeof app>({ url: "ws://localhost:3000" });
+const match = client.match("match-123");
+
+// State syncs automatically — no manual event listeners for score updates
+match.state.subscribe((state) => {
+  console.log(state.phase);    // typed: "lobby" | "playing" | "finished"
+  console.log(state.players);  // typed: { id: string; score: number }[]
+  console.log(state.round);    // typed: number
+});
+
+await match.join({ playerId: "player-1" });
+//                  ^ autocompletes, type-checked
+
+await match.startRound();
+await match.submitAnswer({ playerId: "player-1", correct: true });
+//                         ^ type error if you pass wrong shape
+```
+
+### What's different
+
+Rivet and Zocket both use the actor model. The architecture is similar. The differences are in DX:
+
+- **Type safety**: Zocket's types flow from the actor definition to the client automatically. Rivet's events and RPC calls are loosely typed.
+- **State sync**: Zocket automatically syncs state to subscribers via JSON patches. In Rivet, you manually `broadcast` events and the client manually listens.
+- **No vendor lock-in**: Zocket runs anywhere — `bun run server.ts` locally, Docker Compose for distributed, or (eventually) the hosted platform. Rivet requires their infrastructure.
+
+Rivet is solid infrastructure. Zocket is a better developer experience on top of the same actor model.
+
+---
+
+## Temporal vs Zocket — AI Agent with Tool Calls
+
+An AI agent that takes a prompt, calls an LLM, executes tool calls, and has a timeout. Temporal's core domain is durable workflows.
+
+### Temporal
+
+**Workflow** — deterministic, replay-safe execution:
+
+```ts
+// workflows.ts
+import { proxyActivities, sleep, defineSignal, setHandler } from "@temporalio/workflow";
+import type * as activities from "./activities";
+
+const { callLLM, executeTool, saveResult } = proxyActivities<typeof activities>({
+  startToCloseTimeout: "30s",
+  retry: { maximumAttempts: 3 },
+});
+
+export const cancelSignal = defineSignal("cancel");
+
+export async function agentWorkflow(prompt: string): Promise<string> {
+  let cancelled = false;
+  setHandler(cancelSignal, () => { cancelled = true; });
+
+  // Call LLM (must be an activity — workflows are deterministic)
+  const response = await callLLM(prompt);
+
+  if (cancelled) return "Cancelled";
+
+  // Execute tool calls
+  const toolResults: Record<string, unknown> = {};
+  for (const tool of response.toolCalls) {
+    if (cancelled) break;
+    toolResults[tool.id] = await executeTool(tool.name, tool.args);
+  }
+
+  // Race: either finish or timeout
+  const result = await Promise.race([
+    saveResult(prompt, response, toolResults),
+    sleep("30s").then(() => "Timeout"),
+  ]);
+
+  return result;
+}
+```
+
+**Activities** — where the actual work happens:
+
+```ts
+// activities.ts
+export async function callLLM(prompt: string) {
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [{ role: "user", content: prompt }],
+  });
+  return response;
+}
+
+export async function executeTool(name: string, args: unknown) {
+  // tool execution logic
+}
+
+export async function saveResult(prompt: string, response: unknown, toolResults: unknown) {
+  // persist results
+  return "Done";
+}
+```
+
+**Worker** — run the workflow engine:
+
+```ts
+// worker.ts
+import { Worker } from "@temporalio/worker";
+import * as activities from "./activities";
+
+const worker = await Worker.create({
+  workflowsPath: require.resolve("./workflows"),
+  activities,
+  taskQueue: "agent-tasks",
+});
+
+await worker.run();
+```
+
+**Client** — start the workflow:
+
+```ts
+// client.ts
+import { Client } from "@temporalio/client";
+
+const client = new Client();
+const handle = await client.workflow.start("agentWorkflow", {
+  args: ["Summarize this document"],
+  taskQueue: "agent-tasks",
+  workflowId: "agent-run-123",
+});
+
+// Query result (polling — no real-time streaming)
+const result = await handle.result();
+console.log(result);
+```
+
+### Zocket
+
+**Server** — one actor, straightforward code:
+
+```ts
+// agent.ts
+import { z } from "zod";
+import { actor, createApp } from "@zocket/core";
+import { serve } from "@zocket/server/bun";
+import { openai } from "@ai-sdk/openai";
+import { streamText } from "ai";
+
+const AgentRun = actor({
+  state: z.object({
+    messages: z.array(z.any()).default([]),
+    toolResults: z.record(z.any()).default({}),
+    status: z.enum(["idle", "running", "done", "timeout"]).default("idle"),
+  }),
+
+  methods: {
+    start: {
+      input: z.object({ prompt: z.string() }),
+      stream: true,
+      handler: async ({ state, input, timer }) => {
+        state.status = "running";
+        state.messages.push({ role: "user", content: input.prompt });
+
+        // Timeout safety
+        timer.after(30_000).timeout();
+
+        // Call LLM — just a normal async call, no activity wrapper
+        const result = await streamText({
+          model: openai("gpt-4o"),
+          messages: state.messages,
+        });
+
+        for await (const chunk of result.textStream) {
+          state.messages.push({ role: "assistant", content: chunk });
+          // state patches stream to client automatically (stream: true)
+        }
+
+        // Execute tool calls
+        for (const tool of result.toolCalls ?? []) {
+          state.toolResults[tool.toolCallId] = await executeTool(tool);
+        }
+
+        state.status = "done";
+      },
+    },
+
+    timeout: {
+      handler: ({ state }) => {
+        if (state.status === "running") {
+          state.status = "timeout";
+        }
+      },
+    },
+  },
+});
+
+const app = createApp({ actors: { agent: AgentRun } });
+serve(app, { port: 3000 });
+```
+
+**Client** — real-time streaming, no polling:
+
+```ts
+// client.ts
+import { createClient } from "@zocket/client";
+import type { app } from "./agent";
+
+const client = createClient<typeof app>({ url: "ws://localhost:3000" });
+const agent = client.agent("run-123");
+
+// State streams in real-time — see every token, every tool result, status changes
+agent.state.subscribe((state) => {
+  console.log(state.status);      // "idle" → "running" → "done"
+  console.log(state.messages);    // grows as tokens stream in
+  console.log(state.toolResults); // fills in as tools complete
+});
+
+await agent.start({ prompt: "Summarize this document" });
+```
+
+### What's different
+
+Temporal gives you **durable execution** — your workflow survives any crash by replaying from an event log. That's powerful, but the cost is high:
+
+- You split code into workflows (deterministic, no I/O) and activities (where work happens). A simple LLM call requires three files and an activity wrapper.
+- No real-time streaming. The client polls for results or waits for completion. There's no way for the UI to see tokens arrive.
+- You run a worker process, a Temporal server (or Temporal Cloud), and a client. Three moving parts for what is conceptually "call an LLM and stream the result."
+- Replay-based determinism means you can't use `Date.now()`, `Math.random()`, or any non-deterministic API in a workflow.
+
+Zocket trades durability for simplicity. An actor is just code — call the LLM, mutate state, set a timer. The client sees state changes in real-time. One file, one process.
+
+If you need to survive arbitrary server crashes mid-execution, Temporal is the right tool. If you need real-time streaming, fast iteration, and a UI that shows what the agent is doing as it happens — Zocket gets you there with a fraction of the complexity.
+
+---
+
+## Summary
+
+| | Socket.io | Liveblocks | Rivet | Temporal | Zocket |
+|---|---|---|---|---|---|
+| **State management** | DIY (Map + broadcast) | Hosted (their storage) | Manual broadcast | Activity results | Immer + auto-sync |
+| **Type safety** | None | Partial | Partial | Manual casting | End-to-end |
+| **Real-time streaming** | Manual events | Presence only | Manual broadcast | No (polling) | JSON patches |
+| **Self-hostable** | Yes | No | Yes | Yes (complex) | Yes |
+| **Lines of code** (examples above) | ~60 server + ~20 client | ~0 server + ~40 client | ~50 server + ~20 client | ~60 workflow + ~20 activities + ~10 worker + ~10 client | ~40 server + ~15 client |

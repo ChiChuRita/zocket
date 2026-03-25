@@ -76,6 +76,10 @@ export default defineConfig({
           slug: "comparison",
         },
         {
+          label: "Zocket vs Others",
+          slug: "comparisons",
+        },
+        {
           label: "Use Cases",
           slug: "use-cases",
         },

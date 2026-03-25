@@ -2,6 +2,140 @@
 
 This document describes features that are designed but not yet implemented. Each section explains the DX, why it matters, and how it would work under the hood.
 
+## Plain Object State
+
+State definitions switch from Zod schemas to plain object literals. The initial value is the default AND the type source — no schema library needed for state.
+
+### Current (Zod)
+
+```ts
+const counter = actor({
+  state: z.object({
+    count: z.number().default(0),
+    players: z.array(z.string()).default([]),
+    phase: z.enum(["lobby", "playing"]).default("lobby"),
+  }),
+  methods: { ... },
+});
+```
+
+### Proposed (plain object)
+
+```ts
+const counter = actor({
+  state: {
+    count: 0,
+    players: [] as string[],
+    phase: "lobby" as "lobby" | "playing",
+  },
+  methods: { ... },
+});
+```
+
+TypeScript infers the type from the object. The object itself is used as the default state when a new actor instance is created. No `.default()` boilerplate, no Zod dependency for state.
+
+This is how Zustand, Jotai, and XState handle state — give it a value, the type is inferred.
+
+### Method inputs stay validated
+
+Method inputs still use Zod (or any Standard Schema). Inputs come from clients over WebSocket — untrusted data needs runtime validation. State is server-internal and doesn't cross a trust boundary.
+
+```ts
+methods: {
+  set: {
+    input: z.object({ value: z.number().min(0) }), // validated
+    handler: ({ state, input }) => {
+      state.count = input.value; // state is just a typed object
+    },
+  },
+},
+```
+
+---
+
+## Targeted Events and Connection Tracking
+
+Currently, `emit("event", payload)` broadcasts to all event subscribers on an actor instance. There's no way to send an event to a specific client, list connected clients, or route based on connection identity.
+
+### Why this matters
+
+- **Games**: show each player only their own hand
+- **Permissions**: send admin-only events to admin connections
+- **DMs**: private messages within a shared actor
+- **Errors**: send validation errors only to the client that caused them
+
+### DX
+
+```ts
+const GameRoom = actor({
+  state: {
+    players: {} as Record<string, { hand: string[]; score: number }>,
+  },
+
+  methods: {
+    dealCards: {
+      handler: ({ state, emit, connections }) => {
+        // Broadcast to everyone
+        emit("roundStarted", { round: 1 });
+
+        // Send each player their private hand
+        for (const id of connections.list()) {
+          const player = state.players[id];
+          if (player) {
+            emit.to(id, "yourHand", { cards: player.hand });
+          }
+        }
+      },
+    },
+
+    kick: {
+      input: z.object({ playerId: z.string() }),
+      handler: ({ state, input, emit }) => {
+        delete state.players[input.playerId];
+        // Notify only the kicked player
+        emit.to(input.playerId, "kicked", { reason: "removed by host" });
+      },
+    },
+  },
+
+  events: {
+    roundStarted: {} as { round: number },
+    yourHand: {} as { cards: string[] },
+    kicked: {} as { reason: string },
+  },
+});
+```
+
+### API
+
+**`emit(event, payload)`** — broadcast to all event subscribers (unchanged).
+
+**`emit.to(connectionId, event, payload)`** — send to one specific connection. The event only reaches that client.
+
+**`connections.list()`** — returns `string[]` of currently connected client IDs. Read-only.
+
+State stays broadcast — all subscribers see the same patches. Private data goes through targeted events. This is how multiplayer game servers work: shared state for public info, targeted events for private info.
+
+### Event definitions
+
+Events switch from Zod to plain type literals, matching the state change:
+
+```ts
+// Current (Zod)
+events: {
+  newMessage: z.object({ text: z.string(), from: z.string() }),
+},
+
+// Proposed (plain type)
+events: {
+  newMessage: {} as { text: string; from: string },
+},
+```
+
+Events are server-created — they don't need runtime validation. The type literal gives you compile-time checking on `emit()` calls without Zod.
+
+---
+
 ## Timers
 
 Actors can schedule delayed self-calls. A timer fires after a given duration and invokes a method on the same actor instance, through the same sequential queue.
@@ -282,9 +416,80 @@ Timers and cron use the same method chaining pattern as the client SDK. Actor-to
 
 ---
 
+## Streaming Methods
+
+By default, state patches are computed and broadcast when a handler finishes. For long-running methods (LLM calls, file processing, multi-step workflows), you want patches to stream to clients as state changes — not after the handler returns.
+
+### `stream: true`
+
+Mark a method as streaming. The runtime automatically broadcasts state patches at a regular interval (default ~50ms) while the handler executes:
+
+```ts
+const Conversation = actor({
+  state: z.object({
+    output: z.string().default(""),
+    status: z.enum(["idle", "thinking", "done"]).default("idle"),
+  }),
+
+  methods: {
+    // Regular method — patches sent on completion
+    reset: {
+      handler: ({ state }) => {
+        state.output = "";
+        state.status = "idle";
+      },
+    },
+
+    // Streaming method — patches sent automatically as state changes
+    generate: {
+      stream: true,
+      handler: async ({ state }) => {
+        state.status = "thinking";
+        // client sees "thinking" within ~50ms
+
+        for await (const chunk of llmStream) {
+          state.output += chunk;
+          // patches batch and send automatically every tick
+        }
+
+        state.status = "done";
+        // final patches sent on completion
+      },
+    },
+  },
+});
+```
+
+The handler looks exactly like a regular handler. No `flush()` calls, no generators, no new syntax. The only difference is `stream: true` on the method definition.
+
+### How it works
+
+When a streaming method executes, the runtime runs a tick loop (every ~50ms):
+
+1. Finalize the current Immer draft, compute JSON patches
+2. Broadcast patches to all state subscribers
+3. Create a fresh Immer draft for continued mutation
+
+When the handler finishes, a final flush sends any remaining patches. The tick loop stops.
+
+Regular methods (without `stream: true`) are unchanged — one draft, patches computed once at the end.
+
+### Configuration
+
+```ts
+// Boolean — use default interval (~50ms)
+stream: true,
+
+// Custom interval in milliseconds
+stream: { interval: 16 },  // ~60fps for game state
+stream: { interval: 100 }, // lower frequency for less chatty updates
+```
+
+---
+
 ## How They Work Together
 
-These three features compose naturally:
+These features compose naturally:
 
 ```ts
 const AgentRun = actor({
@@ -296,18 +501,29 @@ const AgentRun = actor({
   methods: {
     start: {
       input: z.object({ prompt: z.string() }),
+      stream: true,
       handler: async ({ state, input, timer, actors }) => {
-        const response = await callLLM(input.prompt);
-        state.messages.push(response);
+        state.messages.push({ role: "user", content: input.prompt });
+        state.messages.push({ role: "assistant", content: "" });
 
-        if (response.toolCalls.length > 0) {
-          for (const tool of response.toolCalls) {
-            await actors.tool(tool.id).execute(tool.args);
-          }
-          timer.after(30_000).timeout();
-        } else {
-          state.status = "done";
+        const result = streamText({
+          model: openai("gpt-4o"),
+          messages: state.messages.slice(0, -1),
+        });
+
+        for await (const chunk of result.textStream) {
+          state.messages.at(-1).content += chunk;
+          // patches stream to client automatically
         }
+
+        if (result.toolCalls?.length) {
+          for (const tool of result.toolCalls) {
+            await actors.tool(tool.name).execute(tool.args);
+          }
+        }
+
+        timer.after(30_000).timeout();
+        state.status = "done";
       },
     },
 
@@ -322,7 +538,7 @@ const AgentRun = actor({
 });
 ```
 
-Timer for timeout safety. Actor-to-actor for tool delegation. State sync for real-time UI updates. All running through the same sequential queue with single-writer guarantees.
+`stream: true` for token streaming. Timer for timeout safety. Actor-to-actor for tool delegation. All running through the same sequential queue with single-writer guarantees.
 
 ---
 
@@ -408,43 +624,27 @@ By putting `useChat()` on top of a Zocket actor instead of an API route:
 
 | Requirement | Description |
 |---|---|
-| **Streaming responses** | A method must send chunks to the client before completing. New protocol message: `rpc:stream` for partial data, alongside existing `rpc:result` for the final response. |
-| **`flush()` in handler context** | Mid-handler state broadcasting. The `aiHandler` needs to push message state as tokens arrive. |
+| **Streaming methods** | `stream: true` on method definitions — `aiHandler` uses this internally so state patches (tokens) stream to clients automatically. |
+| **Streaming RPC** | New protocol message `rpc:stream` for sending partial return values before `rpc:result`. The `useZocketAI` adapter converts these into a `ReadableStream` body that `useChat()` consumes. |
 | **AbortSignal in handler context** | Cancellation support. Client sends abort → handler's signal fires → LLM call cancelled. |
-
-### How `rpc:stream` works
-
-Today the protocol has:
-- Client sends `rpc` (request)
-- Server sends `rpc:result` (final response)
-
-For streaming, add:
-- Server sends `rpc:stream` (partial chunk, same RPC ID) — zero or more
-- Server sends `rpc:result` (final, same RPC ID) — exactly one
-
-The client SDK collects `rpc:stream` chunks and delivers them to a callback or async iterator. `useChat()`'s fetch adapter converts these into a `ReadableStream` body that the AI SDK consumes.
-
-```ts
-// Protocol messages
-{ type: "rpc:stream", id: "rpc_1", chunk: "Hello" }
-{ type: "rpc:stream", id: "rpc_1", chunk: " world" }
-{ type: "rpc:result", id: "rpc_1", result: null }
-```
-
-This is a general-purpose streaming RPC mechanism — useful beyond AI for any long-running method that produces incremental output.
 
 ---
 
 ## Implementation Priority
 
-1. **Timers** — lowest effort, highest immediate value
-2. **Cron** — trivial extension of timers
-3. **Actor-to-actor** — enables composition, slightly more complex (Proxy wiring, invokeInternal)
-4. **`flush()` + streaming RPC** — unlocks the AI story
-5. **`@zocket/ai` integration** — the AI SDK adapter layer, built on top of flush + streaming
+1. **Plain object state + event types** — remove Zod from state/events, simplify DX. Touches core types and server runtime.
+2. **Targeted events + connections** — `emit.to()` and `connections.list()`. Touches server runtime.
+3. **Timers** — lowest effort, highest immediate value
+4. **Cron** — trivial extension of timers
+5. **Actor-to-actor** — enables composition, slightly more complex (Proxy wiring, invokeInternal)
+6. **Streaming methods** (`stream: true`) — unlocks real-time LLM token streaming and any long-running handler
+7. **Streaming RPC** (`rpc:stream`) — unlocks the AI SDK adapter
+8. **`@zocket/ai` integration** — the AI SDK adapter layer, built on top of streaming
 
-Features 1-3 only touch `@zocket/core` (types) and `@zocket/server` (runtime). Client and gateway are unaffected.
+Features 1-5 only touch `@zocket/core` (types) and `@zocket/server` (runtime). Client and gateway are unaffected.
 
-Feature 4 touches the protocol (`@zocket/core`), server, and client (new `rpc:stream` message type).
+Feature 6 touches only `@zocket/server` (runtime tick loop for streaming methods).
 
-Feature 5 is a new package (`@zocket/ai`) that depends on everything below it.
+Feature 7 touches the protocol (`@zocket/core`), server, and client (new `rpc:stream` message type).
+
+Feature 8 is a new package (`@zocket/ai`) that depends on everything below it.

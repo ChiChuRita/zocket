@@ -1,9 +1,89 @@
 ---
 title: Roadmap
-description: Upcoming features — timers, cron, actor-to-actor calls, streaming, and AI SDK integration.
+description: Upcoming features — plain object state, targeted events, timers, cron, actor-to-actor calls, streaming, and AI SDK integration.
 ---
 
 Features that are designed and coming soon. The APIs shown here are stable — implementation is in progress.
+
+## Plain Object State
+
+State definitions are switching from Zod schemas to plain object literals. The initial value is the default AND the type source.
+
+```ts
+// Before (Zod)
+const counter = actor({
+  state: z.object({
+    count: z.number().default(0),
+    players: z.array(z.string()).default([]),
+  }),
+  methods: { ... },
+});
+
+// After (plain object)
+const counter = actor({
+  state: {
+    count: 0,
+    players: [] as string[],
+  },
+  methods: { ... },
+});
+```
+
+TypeScript infers the type from the object. No `.default()` boilerplate, no Zod dependency for state.
+
+Method inputs still use Zod — inputs come from clients over WebSocket and need runtime validation. State is server-internal and doesn't cross a trust boundary.
+
+---
+
+## Targeted Events
+
+Currently, `emit("event", payload)` broadcasts to all subscribers. Targeted events let you send to a specific client:
+
+```ts
+const GameRoom = actor({
+  state: {
+    players: {} as Record<string, { hand: string[]; score: number }>,
+  },
+
+  methods: {
+    dealCards: {
+      handler: ({ state, emit, connections }) => {
+        // Broadcast to everyone
+        emit("roundStarted", { round: 1 });
+
+        // Send each player their private hand
+        for (const id of connections.list()) {
+          const player = state.players[id];
+          if (player) {
+            emit.to(id, "yourHand", { cards: player.hand });
+          }
+        }
+      },
+    },
+  },
+
+  events: {
+    roundStarted: {} as { round: number },
+    yourHand: {} as { cards: string[] },
+  },
+});
+```
+
+**`emit.to(connectionId, event, payload)`** — send to one specific connection.
+
+**`connections.list()`** — returns `string[]` of connected client IDs.
+
+Event definitions also switch from Zod to plain type literals, matching the state change:
+
+```ts
+events: {
+  newMessage: {} as { text: string; from: string },
+},
+```
+
+State stays broadcast (all subscribers see the same patches). Private data goes through targeted events.
+
+---
 
 ## Timers
 
@@ -149,36 +229,56 @@ This is the same trade-off other actor frameworks make (Erlang GenServers, Tempo
 
 ---
 
-## Mid-Handler State Flushing
+## Streaming Methods
 
-By default, state patches are computed and broadcast when a handler finishes. `flush()` lets you broadcast patches at any point during execution — critical for streaming LLM tokens, progress indicators, or any long-running operation.
+By default, state patches are computed and broadcast when a handler finishes. For long-running methods (LLM calls, file processing, multi-step workflows), you want patches to stream to clients as state changes.
+
+Mark a method as streaming with `stream: true`. The runtime automatically broadcasts state patches at a regular interval while the handler executes:
 
 ```ts
-handler: async ({ state, flush }) => {
-  state.status = "thinking";
-  flush(); // client sees "thinking" immediately
+methods: {
+  // Regular method — patches sent on completion
+  reset: {
+    handler: ({ state }) => {
+      state.output = "";
+      state.status = "idle";
+    },
+  },
 
-  for await (const chunk of llmStream) {
-    state.output += chunk;
-    flush(); // client sees each token
-  }
+  // Streaming method — patches sent automatically as state changes
+  generate: {
+    stream: true,
+    handler: async ({ state }) => {
+      state.status = "thinking";
+      // client sees "thinking" within ~50ms
 
-  state.status = "done";
-  // final patches broadcast automatically when handler returns
-}
+      for await (const chunk of llmStream) {
+        state.output += chunk;
+        // patches batch and send automatically every tick
+      }
+
+      state.status = "done";
+    },
+  },
+},
 ```
 
-Without `flush()`, a 3-second LLM call means the client sees nothing for 3 seconds, then the entire response appears at once. With `flush()`, updates stream in real-time.
+The handler looks exactly like a regular handler. No manual flush calls, no generators, no new syntax. `stream: true` is the only change.
 
-Under the hood, `flush()` finalizes the current Immer draft, computes JSON patches, broadcasts them to subscribers, then creates a fresh draft for the rest of the handler.
+Under the hood, the runtime runs a tick loop (~50ms) during streaming methods: finalize the Immer draft, compute JSON patches, broadcast to subscribers, create a fresh draft. When the handler finishes, a final flush sends remaining patches.
+
+```ts
+// Configuration options
+stream: true,               // default interval (~50ms)
+stream: { interval: 16 },   // ~60fps for game state
+stream: { interval: 100 },  // lower frequency for less chatty updates
+```
 
 ---
 
 ## Streaming RPC
 
-Separate from `flush()` (which streams state patches), Streaming RPC lets a method send partial **return values** to the caller before completing.
-
-Use `flush()` when you want all state subscribers to see updates. Use Streaming RPC when you want to stream data back to the specific caller who invoked the method.
+Separate from streaming methods (which stream state patches to all subscribers), Streaming RPC lets a method send partial **return values** to the specific caller.
 
 A new protocol message type `rpc:stream` sends chunks before the final `rpc:result`:
 
@@ -189,7 +289,7 @@ A new protocol message type `rpc:stream` sends chunks before the final `rpc:resu
 ← { type: "rpc:result", id: "rpc_1", result: "Hello world" }
 ```
 
-This is a general-purpose mechanism — useful for AI token streaming, file processing progress, or any method that produces incremental output.
+This is a general-purpose mechanism — useful for AI token streaming, file processing progress, or any method that produces incremental output. The AI SDK integration uses this to bridge `useChat()`'s streaming protocol over Zocket's WebSocket transport.
 
 ---
 
@@ -262,7 +362,7 @@ By putting `useChat()` on top of a Zocket actor instead of an API route:
 
 ## How They Compose
 
-These features work together naturally. Here's an AI agent that uses timers for timeout safety, actor-to-actor calls for tool delegation, and `flush()` for streaming state to the UI:
+These features work together naturally. Here's an AI agent that uses `stream: true` for token streaming, timers for timeout safety, and actor-to-actor calls for tool delegation:
 
 ```ts
 import { streamText } from "ai";
@@ -278,12 +378,11 @@ const AgentRun = actor({
   methods: {
     start: {
       input: z.object({ prompt: z.string() }),
-      handler: async ({ state, input, timer, actors, flush }) => {
+      stream: true,
+      handler: async ({ state, input, timer, actors }) => {
         state.messages.push({ role: "user", content: input.prompt });
         state.messages.push({ role: "assistant", content: "" });
-        flush();
 
-        // Stream LLM response using AI SDK
         const result = streamText({
           model: openai("gpt-4o"),
           messages: state.messages.slice(0, -1),
@@ -291,17 +390,15 @@ const AgentRun = actor({
 
         for await (const chunk of result.textStream) {
           state.messages.at(-1).content += chunk;
-          flush(); // client sees each token
+          // patches stream to client automatically
         }
 
-        // Delegate tool calls to other actors
         if (result.toolCalls?.length) {
           for (const tool of result.toolCalls) {
             await actors.tool(tool.name).execute(tool.args);
           }
         }
 
-        // Safety timeout
         timer.after(30_000).timeout();
         state.status = "done";
       },
@@ -318,7 +415,7 @@ const AgentRun = actor({
 });
 ```
 
-Timer for timeout safety. Actor-to-actor for tool delegation. `flush()` for token streaming. All running through the same sequential queue with single-writer guarantees.
+`stream: true` for token streaming. Timer for timeout safety. Actor-to-actor for tool delegation. All running through the same sequential queue with single-writer guarantees.
 
 ---
 
@@ -326,9 +423,13 @@ Timer for timeout safety. Actor-to-actor for tool delegation. `flush()` for toke
 
 | Feature | Type-safe? | Details |
 |---------|-----------|---------|
+| `state: { count: 0 }` | Yes | Type inferred from initial value |
+| `emit("event", payload)` | Yes | Event names and payloads type-checked |
+| `emit.to(id, "event", payload)` | Yes | Same, routed to specific connection |
+| `connections.list()` | Yes | Returns `string[]` |
 | `timer.after(ms).method()` | Yes | Method names autocomplete, inputs type-checked |
 | `timer.every(ms).method()` | Yes | Same |
 | `timer.cancel(id)` | Yes | |
 | `cron: { method: { every } }` | Yes | Method names constrained to `keyof TMethods` |
-| `flush()` | Yes | No arguments |
+| `stream: true` | Yes | Declarative, no handler changes |
 | `actors.type(id).method()` | No | Circular type dependency at definition time |

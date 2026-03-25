@@ -70,6 +70,48 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
   }
 
   // -----------------------------------------------------------------------
+  // Actor lifecycle hooks
+  // -----------------------------------------------------------------------
+
+  /** Called by the manager after the instance is created. */
+  activate(): void {
+    const handler = (this.def.config as any).onActivate;
+    if (!handler) return;
+    this.queue.push({
+      run: async () => {
+        const draft = createDraft(this.state as any);
+        let result: unknown = handler({ state: draft });
+        if (result instanceof Promise) await result;
+        this.state = finishDraft(draft) as any;
+      },
+    });
+    this.drain();
+  }
+
+  /** Called by the manager before the instance is destroyed. Returns a promise that resolves when done. */
+  deactivate(): Promise<void> {
+    const handler = (this.def.config as any).onDeactivate;
+    if (!handler) return Promise.resolve();
+    return new Promise((resolve) => {
+      this.queue.push({
+        run: async () => {
+          const draft = createDraft(this.state as any);
+          let result: unknown = handler({ state: draft });
+          if (result instanceof Promise) await result;
+          this.state = finishDraft(draft) as any;
+          resolve();
+        },
+      });
+      this.drain();
+    });
+  }
+
+  /** Get a snapshot of the current state (for persistence). */
+  getState(): unknown {
+    return this.state;
+  }
+
+  // -----------------------------------------------------------------------
   // Event & state subscriptions
   // -----------------------------------------------------------------------
 
@@ -103,7 +145,7 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
   }
 
   // -----------------------------------------------------------------------
-  // Lifecycle hooks
+  // Connection lifecycle hooks
   // -----------------------------------------------------------------------
 
   trackConnect(conn: Connection): void {
@@ -287,6 +329,17 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
 }
 
 // ---------------------------------------------------------------------------
+// Manager events
+// ---------------------------------------------------------------------------
+
+export type ManagerEvent = "actorCreated" | "actorDestroyed";
+
+export interface ActorInfo {
+  actorName: string;
+  actorId: string;
+}
+
+// ---------------------------------------------------------------------------
 // ActorManager — owns all actor instances for this process
 // ---------------------------------------------------------------------------
 
@@ -294,10 +347,34 @@ export class ActorManager {
   private instances = new Map<string, ActorInstance>();
   private creating = new Map<string, Promise<ActorInstance>>();
   private actors: Record<string, ActorDef<any, any, any>>;
+  private listeners = new Map<ManagerEvent, Set<(info: ActorInfo) => void>>();
 
   constructor(actors: Record<string, ActorDef<any, any, any>>) {
     this.actors = actors;
   }
+
+  // -----------------------------------------------------------------------
+  // Events
+  // -----------------------------------------------------------------------
+
+  on(event: ManagerEvent, cb: (info: ActorInfo) => void): () => void {
+    let set = this.listeners.get(event);
+    if (!set) {
+      set = new Set();
+      this.listeners.set(event, set);
+    }
+    set.add(cb);
+    return () => set!.delete(cb);
+  }
+
+  private emit(event: ManagerEvent, info: ActorInfo): void {
+    const set = this.listeners.get(event);
+    if (set) for (const cb of set) cb(info);
+  }
+
+  // -----------------------------------------------------------------------
+  // Instance management
+  // -----------------------------------------------------------------------
 
   private key(actorName: string, actorId: string): string {
     return `${actorName}:${actorId}`;
@@ -338,6 +415,8 @@ export class ActorManager {
 
       const created = new ActorInstance(actorName, actorId, def, initialState);
       this.instances.set(k, created);
+      created.activate();
+      this.emit("actorCreated", { actorName, actorId });
       return created;
     })();
 
@@ -350,9 +429,43 @@ export class ActorManager {
     }
   }
 
+  /** Destroy a specific actor instance. Calls onDeactivate if defined. */
+  async destroy(actorName: string, actorId: string): Promise<boolean> {
+    const k = this.key(actorName, actorId);
+    const instance = this.instances.get(k);
+    if (!instance) return false;
+    await instance.deactivate();
+    this.instances.delete(k);
+    this.emit("actorDestroyed", { actorName, actorId });
+    return true;
+  }
+
+  /** Destroy all actor instances. */
+  async destroyAll(): Promise<void> {
+    const entries = [...this.instances.entries()];
+    await Promise.all(entries.map(([, instance]) => instance.deactivate()));
+    for (const [k, instance] of entries) {
+      this.instances.delete(k);
+      this.emit("actorDestroyed", { actorName: instance.actorName, actorId: instance.actorId });
+    }
+  }
+
   removeConnection(conn: Connection): void {
     for (const instance of this.instances.values()) {
       instance.removeConnection(conn);
     }
+  }
+
+  /** Number of hot actor instances. */
+  get size(): number {
+    return this.instances.size;
+  }
+
+  /** List all hot actor instances. */
+  list(): ActorInfo[] {
+    return [...this.instances.values()].map((i) => ({
+      actorName: i.actorName,
+      actorId: i.actorId,
+    }));
   }
 }

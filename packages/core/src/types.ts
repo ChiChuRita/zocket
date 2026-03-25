@@ -117,6 +117,16 @@ export type LifecycleHandler<TState> = (
   ctx: LifecycleContext<TState>,
 ) => void | Promise<void>;
 
+/** Context passed to onActivate / onDeactivate actor lifecycle hooks */
+export interface ActorLifecycleContext<TState> {
+  state: TState;
+}
+
+/** An actor lifecycle hook that can mutate state */
+export type ActorLifecycleHandler<TState> = (
+  ctx: ActorLifecycleContext<TState>,
+) => void | Promise<void>;
+
 // ---------------------------------------------------------------------------
 // Actor definition
 // ---------------------------------------------------------------------------
@@ -130,6 +140,10 @@ export interface ActorConfig<
   state: TState;
   methods: TMethods;
   events?: TEvents;
+  /** Called when the actor instance is first created. */
+  onActivate?: ActorLifecycleHandler<InferSchema<TState>>;
+  /** Called before the actor instance is destroyed (eviction, shutdown, redeploy). */
+  onDeactivate?: ActorLifecycleHandler<InferSchema<TState>>;
   /** Called when a client first subscribes to this actor instance. */
   onConnect?: LifecycleHandler<InferSchema<TState>>;
   /** Called when a client's connection to this actor instance closes. */

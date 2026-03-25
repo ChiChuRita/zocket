@@ -9,14 +9,18 @@ import { ActorManager, type Connection } from "./runtime.js";
 
 export interface HandlerCallbacks {
   onConnection(conn: Connection): void;
-  onMessage(conn: Connection, raw: string): void;
+  onMessage(conn: Connection, raw: string): Promise<void>;
   onClose(conn: Connection): void;
+  /** The underlying actor manager. Use for inspection, eviction, lifecycle events. */
+  manager: ActorManager;
 }
 
 export function createHandlers(app: AppDef<any>): HandlerCallbacks {
   const manager = new ActorManager(app.actors);
 
   return {
+    manager,
+
     onConnection(_conn: Connection) {
       // no-op for now; subscriptions happen via messages
     },

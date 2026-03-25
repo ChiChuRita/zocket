@@ -54,6 +54,20 @@ interface AppDef<TActors> {
 
 The `_tag` discriminant is used internally for type narrowing. You generally don't need to interact with it directly.
 
+## setup()
+
+`setup()` is an alias for `createApp()` with different naming, used when registering actors for the distributed runtime (docker-compose deployment with gateway + NATS + runtime):
+
+```ts
+import { setup } from "@zocket/core";
+import { counter } from "./actors/counter";
+import { chat } from "./actors/chat";
+
+export const registry = setup({ use: { counter, chat } });
+```
+
+The returned object is the same `AppDef` — the only difference is the naming convention (`use` instead of `actors`). Use `createApp()` for standalone mode and `setup()` for the distributed runtime.
+
 ## Naming Conventions
 
 - Use **camelCase** for actor names: `chat`, `gameMatch`, `drawingRoom`

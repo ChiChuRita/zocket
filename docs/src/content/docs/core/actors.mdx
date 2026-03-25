@@ -140,7 +140,33 @@ Event payloads are validated at runtime against their schemas before being broad
 
 ## Lifecycle Hooks
 
-Actors support `onConnect` and `onDisconnect` hooks. These fire when a connection first interacts with an actor instance and when it disconnects:
+### Actor Lifecycle
+
+Actors support `onActivate` and `onDeactivate` hooks. These fire when an actor instance is first created and before it is destroyed (eviction, shutdown, or redeploy):
+
+```ts
+const Room = actor({
+  state: z.object({
+    createdAt: z.number().default(0),
+  }),
+
+  methods: { /* ... */ },
+
+  onActivate({ state }) {
+    state.createdAt = Date.now();
+  },
+
+  onDeactivate({ state }) {
+    console.log(`Room shutting down, was created at ${state.createdAt}`);
+  },
+});
+```
+
+Actor lifecycle hooks receive an `ActorLifecycleContext` with `state` (Immer draft). They are queued alongside method calls to preserve ordering.
+
+### Connection Lifecycle
+
+Actors also support `onConnect` and `onDisconnect` hooks. These fire when a connection first interacts with an actor instance and when it disconnects:
 
 ```ts
 const Room = actor({
@@ -161,7 +187,7 @@ const Room = actor({
 });
 ```
 
-Lifecycle hooks receive a `LifecycleContext` with `state` (Immer draft), `connectionId`, and `emit`. They are queued alongside method calls to preserve ordering.
+Connection lifecycle hooks receive a `LifecycleContext` with `state` (Immer draft), `connectionId`, and `emit`. They are queued alongside method calls to preserve ordering.
 
 Note: middleware `ctx` is **not** available in lifecycle hooks — only in method handlers.
 

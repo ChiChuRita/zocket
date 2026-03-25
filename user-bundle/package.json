@@ -1,0 +1,9 @@
+{
+  "name": "user-bundle",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@zocket/core": "workspace:*",
+    "zod": "^4.1.12"
+  }
+}

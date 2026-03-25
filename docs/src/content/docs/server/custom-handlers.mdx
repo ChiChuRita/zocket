@@ -19,10 +19,13 @@ This returns a `HandlerCallbacks` object:
 ```ts
 interface HandlerCallbacks {
   onConnection(conn: Connection): void;
-  onMessage(conn: Connection, raw: string): void;
+  onMessage(conn: Connection, raw: string): Promise<void>;
   onClose(conn: Connection): void;
+  manager: ActorManager;
 }
 ```
+
+Note that `onMessage` is async — if you need to know when processing is done (e.g., to ack a message queue delivery), await it.
 
 ## Connection Interface
 
@@ -56,8 +59,8 @@ myWebSocketServer.on("connection", (ws) => {
 
   handlers.onConnection(conn);
 
-  ws.on("message", (data: string) => {
-    handlers.onMessage(conn, data);
+  ws.on("message", async (data: string) => {
+    await handlers.onMessage(conn, data);
   });
 
   ws.on("close", () => {
@@ -80,12 +83,50 @@ The handler routes messages based on their `type` field:
 
 ## ActorManager
 
-Behind `createHandlers`, an `ActorManager` owns all actor instances:
+The `manager` property on `HandlerCallbacks` gives you direct access to the actor manager. You can also import and construct one yourself:
 
-- `getOrCreate(actorName, actorId)` — lazily creates actor instances with schema-initialized state
-- `removeConnection(conn)` — broadcasts disconnection to all actor instances the connection interacted with
+```ts
+import { ActorManager } from "@zocket/server";
+```
 
-Actor instances are stored in a `Map<"actorName:actorId", ActorInstance>`.
+### Inspecting State
+
+```ts
+const { manager } = handlers;
+
+// Number of hot actor instances
+console.log(manager.size);
+
+// List all hot actors
+const actors = manager.list();
+// [{ actorName: "counter", actorId: "main" }, ...]
+```
+
+### Destroying Actors
+
+```ts
+// Destroy a specific actor (calls onDeactivate if defined)
+await manager.destroy("counter", "main");
+
+// Destroy all actors (for shutdown or redeploy)
+await manager.destroyAll();
+```
+
+### Lifecycle Events
+
+Subscribe to actor creation and destruction:
+
+```ts
+manager.on("actorCreated", ({ actorName, actorId }) => {
+  console.log(`Actor created: ${actorName}/${actorId}`);
+});
+
+manager.on("actorDestroyed", ({ actorName, actorId }) => {
+  console.log(`Actor destroyed: ${actorName}/${actorId}`);
+});
+```
+
+The `on()` method returns an unsubscribe function.
 
 ## State Initialization
 
@@ -94,3 +135,5 @@ When an actor instance is first created, the manager initializes state by:
 1. Validating `{}` against the state schema (works with schemas that have defaults)
 2. If that fails, validating `undefined` (works with top-level `.default()`)
 3. If both fail, using `{}` as a fallback
+
+After initialization, the actor's `onActivate` hook is called if defined.

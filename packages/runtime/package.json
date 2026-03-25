@@ -1,0 +1,23 @@
+{
+  "name": "@zocket/runtime",
+  "version": "0.1.0",
+  "description": "NATS-connected Zocket actor runtime process",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./api": "./src/api.ts"
+  },
+  "private": true,
+  "dependencies": {
+    "@zocket/core": "workspace:*",
+    "@zocket/nats-transport": "workspace:*",
+    "@zocket/server": "workspace:*",
+    "elysia": "^1.4.28",
+    "nats": "^2.29.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}

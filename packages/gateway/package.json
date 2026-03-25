@@ -1,0 +1,16 @@
+{
+  "name": "@zocket/gateway",
+  "version": "0.1.0",
+  "description": "Zocket WebSocket gateway — bridges client connections to NATS/JetStream",
+  "type": "module",
+  "main": "src/index.ts",
+  "private": true,
+  "dependencies": {
+    "@zocket/nats-transport": "workspace:*",
+    "nats": "^2.29.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,5 +1,6 @@
 export { actor } from "./actor";
 export { createApp } from "./app";
+export { setup } from "./setup";
 export { middleware, MiddlewareBuilder } from "./middleware";
 
 export type { MiddlewareFn, MiddlewareArgs } from "./middleware";
@@ -14,6 +15,8 @@ export type {
   EmitFn,
   LifecycleContext,
   LifecycleHandler,
+  ActorLifecycleContext,
+  ActorLifecycleHandler,
   ActorConfig,
   ActorDef,
   AppConfig,

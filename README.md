@@ -15,7 +15,7 @@ Define stateful actors with typed methods, events, and state — then call them 
 - **Events** — typed pub/sub with lazy subscriptions
 - **Middleware** — chainable auth, context enrichment with full type inference
 - **React Hooks** — `useActor`, `useActorState`, `useEvent`, `useConnectionStatus`
-- **Lifecycle Hooks** — `onConnect` / `onDisconnect` for presence tracking
+- **Lifecycle Hooks** — `onActivate` / `onDeactivate` for actor lifecycle, `onConnect` / `onDisconnect` for presence tracking
 
 ## Packages
 
@@ -25,6 +25,9 @@ Define stateful actors with typed methods, events, and state — then call them 
 | `@zocket/server` | Runtime, actor manager, platform adapters |
 | `@zocket/client` | WebSocket client with RPC, reconnection, state sync |
 | `@zocket/react` | React hooks and context provider |
+| `@zocket/runtime` | NATS-connected distributed actor runtime |
+| `@zocket/gateway` | WebSocket gateway that bridges clients to NATS |
+| `@zocket/cli` | CLI for bundling and deploying actors |
 
 ## Quick Start
 

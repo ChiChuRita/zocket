@@ -1,0 +1,16 @@
+{
+  "name": "counter-client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@zocket/client": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vite": "^6.3.5"
+  }
+}

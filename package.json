@@ -17,6 +17,9 @@
   "workspaces": [
     "old/*",
     "packages/*",
-    "docs"
+    "docs",
+    "user-bundle",
+    "examples/*",
+    "examples/*/client"
   ]
 }

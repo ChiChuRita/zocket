@@ -1,0 +1,18 @@
+{
+  "name": "@zocket/cli",
+  "version": "0.1.0",
+  "description": "Zocket CLI — deploy actor bundles to the runtime",
+  "type": "module",
+  "bin": {
+    "zocket": "src/index.ts"
+  },
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@elysiajs/eden": "^1.4.8",
+    "@zocket/runtime": "workspace:*"
+  }
+}

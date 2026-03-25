@@ -2,57 +2,6 @@
 
 This document describes features that are designed but not yet implemented. Each section explains the DX, why it matters, and how it would work under the hood.
 
-## Plain Object State
-
-State definitions switch from Zod schemas to plain object literals. The initial value is the default AND the type source — no schema library needed for state.
-
-### Current (Zod)
-
-```ts
-const counter = actor({
-  state: z.object({
-    count: z.number().default(0),
-    players: z.array(z.string()).default([]),
-    phase: z.enum(["lobby", "playing"]).default("lobby"),
-  }),
-  methods: { ... },
-});
-```
-
-### Proposed (plain object)
-
-```ts
-const counter = actor({
-  state: {
-    count: 0,
-    players: [] as string[],
-    phase: "lobby" as "lobby" | "playing",
-  },
-  methods: { ... },
-});
-```
-
-TypeScript infers the type from the object. The object itself is used as the default state when a new actor instance is created. No `.default()` boilerplate, no Zod dependency for state.
-
-This is how Zustand, Jotai, and XState handle state — give it a value, the type is inferred.
-
-### Method inputs stay validated
-
-Method inputs still use Zod (or any Standard Schema). Inputs come from clients over WebSocket — untrusted data needs runtime validation. State is server-internal and doesn't cross a trust boundary.
-
-```ts
-methods: {
-  set: {
-    input: z.object({ value: z.number().min(0) }), // validated
-    handler: ({ state, input }) => {
-      state.count = input.value; // state is just a typed object
-    },
-  },
-},
-```
-
----
-
 ## Targeted Events and Connection Tracking
 
 Currently, `emit("event", payload)` broadcasts to all event subscribers on an actor instance. There's no way to send an event to a specific client, list connected clients, or route based on connection identity.
@@ -68,9 +17,12 @@ Currently, `emit("event", payload)` broadcasts to all event subscribers on an ac
 
 ```ts
 const GameRoom = actor({
-  state: {
-    players: {} as Record<string, { hand: string[]; score: number }>,
-  },
+  state: z.object({
+    players: z.record(z.object({
+      hand: z.array(z.string()),
+      score: z.number(),
+    })).default({}),
+  }),
 
   methods: {
     dealCards: {
@@ -99,9 +51,9 @@ const GameRoom = actor({
   },
 
   events: {
-    roundStarted: {} as { round: number },
-    yourHand: {} as { cards: string[] },
-    kicked: {} as { reason: string },
+    roundStarted: z.object({ round: z.number() }),
+    yourHand: z.object({ cards: z.array(z.string()) }),
+    kicked: z.object({ reason: z.string() }),
   },
 });
 ```
@@ -115,24 +67,6 @@ const GameRoom = actor({
 **`connections.list()`** — returns `string[]` of currently connected client IDs. Read-only.
 
 State stays broadcast — all subscribers see the same patches. Private data goes through targeted events. This is how multiplayer game servers work: shared state for public info, targeted events for private info.
-
-### Event definitions
-
-Events switch from Zod to plain type literals, matching the state change:
-
-```ts
-// Current (Zod)
-events: {
-  newMessage: z.object({ text: z.string(), from: z.string() }),
-},
-
-// Proposed (plain type)
-events: {
-  newMessage: {} as { text: string; from: string },
-},
-```
-
-Events are server-created — they don't need runtime validation. The type literal gives you compile-time checking on `emit()` calls without Zod.
 
 ---
 
@@ -632,19 +566,18 @@ By putting `useChat()` on top of a Zocket actor instead of an API route:
 
 ## Implementation Priority
 
-1. **Plain object state + event types** — remove Zod from state/events, simplify DX. Touches core types and server runtime.
-2. **Targeted events + connections** — `emit.to()` and `connections.list()`. Touches server runtime.
-3. **Timers** — lowest effort, highest immediate value
-4. **Cron** — trivial extension of timers
-5. **Actor-to-actor** — enables composition, slightly more complex (Proxy wiring, invokeInternal)
-6. **Streaming methods** (`stream: true`) — unlocks real-time LLM token streaming and any long-running handler
-7. **Streaming RPC** (`rpc:stream`) — unlocks the AI SDK adapter
-8. **`@zocket/ai` integration** — the AI SDK adapter layer, built on top of streaming
+1. **Targeted events + connections** — `emit.to()` and `connections.list()`. Touches server runtime.
+2. **Timers** — lowest effort, highest immediate value
+3. **Cron** — trivial extension of timers
+4. **Actor-to-actor** — enables composition, slightly more complex (Proxy wiring, invokeInternal)
+5. **Streaming methods** (`stream: true`) — unlocks real-time LLM token streaming and any long-running handler
+6. **Streaming RPC** (`rpc:stream`) — unlocks the AI SDK adapter
+7. **`@zocket/ai` integration** — the AI SDK adapter layer, built on top of streaming
 
-Features 1-5 only touch `@zocket/core` (types) and `@zocket/server` (runtime). Client and gateway are unaffected.
+Features 1-4 only touch `@zocket/core` (types) and `@zocket/server` (runtime). Client and gateway are unaffected.
 
-Feature 6 touches only `@zocket/server` (runtime tick loop for streaming methods).
+Feature 5 touches only `@zocket/server` (runtime tick loop for streaming methods).
 
-Feature 7 touches the protocol (`@zocket/core`), server, and client (new `rpc:stream` message type).
+Feature 6 touches the protocol (`@zocket/core`), server, and client (new `rpc:stream` message type).
 
-Feature 8 is a new package (`@zocket/ai`) that depends on everything below it.
+Feature 7 is a new package (`@zocket/ai`) that depends on everything below it.

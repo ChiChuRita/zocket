@@ -1,39 +1,9 @@
 ---
 title: Roadmap
-description: Upcoming features — plain object state, targeted events, timers, cron, actor-to-actor calls, streaming, and AI SDK integration.
+description: Upcoming features — targeted events, timers, cron, actor-to-actor calls, streaming, and AI SDK integration.
 ---
 
 Features that are designed and coming soon. The APIs shown here are stable — implementation is in progress.
-
-## Plain Object State
-
-State definitions are switching from Zod schemas to plain object literals. The initial value is the default AND the type source.
-
-```ts
-// Before (Zod)
-const counter = actor({
-  state: z.object({
-    count: z.number().default(0),
-    players: z.array(z.string()).default([]),
-  }),
-  methods: { ... },
-});
-
-// After (plain object)
-const counter = actor({
-  state: {
-    count: 0,
-    players: [] as string[],
-  },
-  methods: { ... },
-});
-```
-
-TypeScript infers the type from the object. No `.default()` boilerplate, no Zod dependency for state.
-
-Method inputs still use Zod — inputs come from clients over WebSocket and need runtime validation. State is server-internal and doesn't cross a trust boundary.
-
----
 
 ## Targeted Events
 
@@ -41,9 +11,12 @@ Currently, `emit("event", payload)` broadcasts to all subscribers. Targeted even
 
 ```ts
 const GameRoom = actor({
-  state: {
-    players: {} as Record<string, { hand: string[]; score: number }>,
-  },
+  state: z.object({
+    players: z.record(z.object({
+      hand: z.array(z.string()),
+      score: z.number(),
+    })).default({}),
+  }),
 
   methods: {
     dealCards: {
@@ -63,8 +36,8 @@ const GameRoom = actor({
   },
 
   events: {
-    roundStarted: {} as { round: number },
-    yourHand: {} as { cards: string[] },
+    roundStarted: z.object({ round: z.number() }),
+    yourHand: z.object({ cards: z.array(z.string()) }),
   },
 });
 ```
@@ -72,14 +45,6 @@ const GameRoom = actor({
 **`emit.to(connectionId, event, payload)`** — send to one specific connection.
 
 **`connections.list()`** — returns `string[]` of connected client IDs.
-
-Event definitions also switch from Zod to plain type literals, matching the state change:
-
-```ts
-events: {
-  newMessage: {} as { text: string; from: string },
-},
-```
 
 State stays broadcast (all subscribers see the same patches). Private data goes through targeted events.
 
@@ -423,7 +388,6 @@ const AgentRun = actor({
 
 | Feature | Type-safe? | Details |
 |---------|-----------|---------|
-| `state: { count: 0 }` | Yes | Type inferred from initial value |
 | `emit("event", payload)` | Yes | Event names and payloads type-checked |
 | `emit.to(id, "event", payload)` | Yes | Same, routed to specific connection |
 | `connections.list()` | Yes | Returns `string[]` |

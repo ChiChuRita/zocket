@@ -105,6 +105,13 @@ web_modules/
 .env.test.local
 .env.production.local
 .env.local
+platform/convex/_generated/
+platform/.dev.vars
+platform/.wrangler/
+platform/.agents/
+platform/.claude/
+platform/.devcontainer/
+platform/.vscode/
 
 # parcel-bundler cache (https://parceljs.org/)
 

@@ -109,6 +109,12 @@ export interface LifecycleContext<TState> {
   state: TState;
   /** Opaque connection identifier — stable for the lifetime of a WebSocket. */
   connectionId: string;
+  /** Authenticated user identity, when the transport provides it. */
+  userId: string | null;
+  /** Verified auth claims or other connection-scoped metadata. */
+  claims: Record<string, unknown>;
+  /** Optional routing scope attached by the transport layer. */
+  scope?: Record<string, string>;
   emit: EmitFn;
 }
 

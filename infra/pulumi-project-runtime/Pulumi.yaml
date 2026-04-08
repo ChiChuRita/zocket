@@ -1,0 +1,3 @@
+name: zocket-project-runtime
+runtime: nodejs
+description: Per-project ECS runtime stack for hosted Zocket deployments

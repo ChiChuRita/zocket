@@ -1,0 +1,3 @@
+name: zocket-cloudflare
+runtime: nodejs
+description: Cloudflare DNS and edge wiring for the hosted Zocket platform

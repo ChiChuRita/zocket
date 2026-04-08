@@ -1,27 +1,58 @@
 ---
 import { Button } from "../components/ui/button";
+import CodeBlock from "../components/code-block.astro";
+
+const serverCode = `import { actor, createApp, serve } from "@zocket/core";
+import { z } from "zod";
+
+const ChatRoom = actor({
+  state: z.object({
+    messages: z.array(z.object({
+      from: z.string(), text: z.string(),
+    })).default([]),
+  }),
+  methods: {
+    send: {
+      input: z.object({ from: z.string(), text: z.string() }),
+      handler: ({ state, input }) => { state.messages.push(input) },
+    },
+  },
+});
+
+export const app = createApp({ actors: { chat: ChatRoom } });
+serve(app, { port: 3000 });`;
+
+const clientCode = `import { createClient } from "@zocket/client";
+import type { app } from "./server";
+
+const client = createClient<typeof app>({
+  url: "ws://localhost:3000",
+});
+
+const room = client.chat("general");
+
+await room.send({ from: "alice", text: "hello!" });
+
+room.state.subscribe((s) => {
+  console.log(s.messages);
+  // → [{ from: "alice", text: "hello!" }]
+});`;
 ---
 
-<section class="relative flex flex-row items-center justify-between overflow-visible">
+<section class="relative flex flex-col gap-12">
   <div class="dot-grid pointer-events-none absolute inset-0 -z-20 opacity-60"></div>
-  <header class="hero-stagger relative flex flex-col gap-1.5">
+  <div class="hero-orb"></div>
+
+  <header class="hero-stagger relative flex flex-col gap-2">
     <h1>
-      realtime <span class="text-primary">serverless</span>
-      <br /> for chats, agents, and rooms
+      typed <span class="shimmer-text font-mono tracking-normal">actors</span> for realtime apps
     </h1>
-    <h3 class="max-w-lg">
-      Build chats, agents, sessions, workflows, and collaborative objects on a
-      typed realtime runtime that keeps live state, method calls, and
-      subscriptions in sync. Zocket gives you a cleaner serverless model for
-      the realtime part of your app instead of stitching together REST,
-      sockets, and client-side sync.
+    <h3 class="max-w-xl">
+      Define actors with Zod, call them from typed clients, state syncs automatically.
     </h3>
-    <div class="flex flex-row gap-4 pt-2">
+    <div class="flex flex-row gap-4 pt-3">
       <a href="/getting-started/" class="w-fit">
-        <Button
-          className="w-fit text-base px-6"
-          size="lg"
-        >
+        <Button className="w-fit text-base px-6" size="lg">
           Get Started
         </Button>
       </a>
@@ -31,33 +62,113 @@ import { Button } from "../components/ui/button";
           className="w-fit text-base flex gap-3 px-6"
           size="lg"
         >
-          <img src="/github-mark-white.svg" class="w-6" alt="Github logo" />
+          <img src="/github-mark-white.svg" class="w-6" alt="GitHub logo" />
           GitHub
         </Button>
       </a>
     </div>
-    <p class="max-w-xl pt-2 text-sm text-white/45 md:text-[15px]">
-      Define the live backend once, call typed methods from clients, and
-      subscribe to state changes without building three separate systems just
-      to ship one realtime feature.
-    </p>
-    <!-- npm install one-liner for mobile -->
-    <div class="mt-3 flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-4 py-2 font-mono text-xs text-white/40 xl:hidden">
+    <div class="terminal-cursor mt-4 flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-4 py-2.5 font-mono text-sm text-white/40 w-fit">
       <span class="text-primary/60">$</span>
-      <span>bun add @zocket/core @zocket/client zod</span>
+      <span>bun add @zocket/core @zocket/server @zocket/client zod</span>
     </div>
   </header>
-  <div class="relative flex w-fit pr-0 md:pr-20 xl:pr-20">
-    <div class="section-glow bg-primary"></div>
-    <img
-      src="/sock2.svg"
-      alt="left sock"
-      class="animate-wiggle-left invisible h-0 w-0 origin-[70%_0] object-cover xl:visible xl:h-[500px] xl:w-[500px]"
-    />
-    <img
-      src="/sock1.svg"
-      alt="right sock"
-      class="animate-wiggle-right invisible absolute left-20 top-20 h-0 w-0 origin-[70%_-0] object-cover drop-shadow-2xl xl:visible xl:h-[500px] xl:w-[500px]"
-    />
+
+  <!-- Code showcase -->
+  <div class="hero-code-entrance relative">
+    <div class="hero-code-glow"></div>
+
+    <div class="flex flex-col gap-5 xl:flex-row xl:items-stretch xl:gap-6">
+      <div class="hero-code-block flex-1 min-w-0">
+        <CodeBlock title="server.ts" code={serverCode} />
+      </div>
+
+      <!-- Type flow connector — desktop -->
+      <div class="hidden xl:flex flex-col items-center justify-center gap-3 py-8">
+        <div class="type-pill flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1">
+          <svg class="h-3.5 w-3.5 text-primary type-nudge" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+          </svg>
+          <span class="font-mono text-[10px] tracking-wider text-primary/70 uppercase">types</span>
+        </div>
+        <div class="h-full w-px bg-gradient-to-b from-transparent via-primary/30 to-transparent"></div>
+      </div>
+
+      <!-- Type flow connector — mobile -->
+      <div class="flex xl:hidden items-center justify-center py-1">
+        <div class="type-pill flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1">
+          <svg class="h-3.5 w-3.5 text-primary rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+          </svg>
+          <span class="font-mono text-[10px] tracking-wider text-primary/70 uppercase">types</span>
+        </div>
+      </div>
+
+      <div class="hero-code-block flex-1 min-w-0">
+        <CodeBlock title="client.ts" code={clientCode} />
+      </div>
+    </div>
   </div>
 </section>
+
+<style>
+  /* Ambient orb behind the hero — warm, diffuse */
+  .hero-orb {
+    position: absolute;
+    top: -15%;
+    left: -10%;
+    width: 60%;
+    height: 120%;
+    background: radial-gradient(
+      ellipse at 30% 40%,
+      hsl(30 100% 50% / 0.05) 0%,
+      hsl(30 100% 50% / 0.02) 40%,
+      transparent 70%
+    );
+    pointer-events: none;
+    z-index: -10;
+  }
+
+  /* Code entrance — delayed after hero header stagger */
+  .hero-code-entrance {
+    opacity: 0;
+    animation: hero-fade-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 0.5s;
+  }
+
+  /* Ambient glow behind code blocks */
+  .hero-code-glow {
+    position: absolute;
+    inset: -25%;
+    z-index: -1;
+    background: radial-gradient(
+      ellipse at 50% 50%,
+      hsl(30 100% 50% / 0.07) 0%,
+      hsl(30 100% 50% / 0.03) 30%,
+      transparent 65%
+    );
+    pointer-events: none;
+  }
+
+  /* Allow hero code blocks full height — don't clip */
+  .hero-code-block :global(.code-content) {
+    max-height: 420px;
+  }
+
+  /* Type flow pill glow on hover */
+  .type-pill {
+    transition: all 0.3s ease;
+  }
+  .type-pill:hover {
+    background: hsl(30 100% 50% / 0.1);
+    border-color: hsl(30 100% 50% / 0.35);
+    box-shadow: 0 0 16px hsl(30 100% 50% / 0.1);
+  }
+
+  @keyframes nudge-right {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(3px); }
+  }
+  .type-nudge {
+    animation: nudge-right 2s ease-in-out infinite;
+  }
+</style>

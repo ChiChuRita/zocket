@@ -13,6 +13,8 @@ let _connCounter = 0;
 
 class BunConnectionAdapter implements Connection {
   readonly id = `bun_${++_connCounter}_${Date.now().toString(36)}`;
+  readonly userId = null;
+  readonly claims: Record<string, unknown> = {};
   ws: ServerWebSocket<WsData> | null = null;
 
   send(message: string): void {

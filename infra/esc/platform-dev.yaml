@@ -1,0 +1,60 @@
+values:
+  # Fill these values locally before importing with:
+  # pulumi env edit --file ./infra/esc/platform-dev.yaml <org>/zocket/platform-dev
+  #
+  # Keep AWS credentials out of this file. Use your normal AWS login/profile.
+  awsRegion: us-west-2
+  cloudflareAccountId: replace-me
+  domainName: zocket.io
+  hostedZoneName: zocket.io
+  internalDomain: zocket.internal
+  neonOrgId: org-royal-salad-29354873
+  neonRegionId: aws-us-east-1
+  neonHistoryRetentionSeconds: 21600
+  platformPublicUrl: http://localhost:3000
+  controlPlaneUrl: ${platformPublicUrl}
+  workosRedirectUri: http://localhost:3000/api/auth/callback
+  s3Bucket: replace-me
+  s3Endpoint: ""
+  s3ForcePathStyle: "false"
+
+  databaseUrl:
+    fn::secret: postgresql://replace-me
+  workosClientId: replace-me
+  workosApiKey:
+    fn::secret: sk_test_replace_me
+  workosCookiePassword:
+    fn::secret: replace-me-with-a-long-random-string
+  controlPlaneInternalToken:
+    fn::secret: replace-me
+  cloudflareApiToken:
+    fn::secret: replace-me
+  neonApiKey:
+    fn::secret: replace-me
+
+  environmentVariables:
+    DATABASE_URL: ${databaseUrl}
+    WORKOS_CLIENT_ID: ${workosClientId}
+    WORKOS_API_KEY: ${workosApiKey}
+    WORKOS_COOKIE_PASSWORD: ${workosCookiePassword}
+    WORKOS_REDIRECT_URI: ${workosRedirectUri}
+    PLATFORM_PUBLIC_URL: ${platformPublicUrl}
+    CONTROL_PLANE_URL: ${controlPlaneUrl}
+    CONTROL_PLANE_INTERNAL_TOKEN: ${controlPlaneInternalToken}
+    S3_BUCKET: ${s3Bucket}
+    S3_ENDPOINT: ${s3Endpoint}
+    S3_FORCE_PATH_STYLE: ${s3ForcePathStyle}
+    AWS_REGION: ${awsRegion}
+    CLOUDFLARE_API_TOKEN: ${cloudflareApiToken}
+    NEON_API_KEY: ${neonApiKey}
+
+  pulumiConfig:
+    aws:region: ${awsRegion}
+    zocket:domainName: ${domainName}
+    zocket:hostedZoneName: ${hostedZoneName}
+    zocket:controlPlaneUrl: ${controlPlaneUrl}
+    zocket:controlPlaneInternalToken: ${controlPlaneInternalToken}
+    zocket:internalDomain: ${internalDomain}
+    zocket:neonOrgId: ${neonOrgId}
+    zocket:neonRegionId: ${neonRegionId}
+    zocket:cloudflareAccountId: ${cloudflareAccountId}

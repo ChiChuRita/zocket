@@ -18,6 +18,12 @@ export interface Connection {
   send(message: string): void;
   /** Stable identifier for lifecycle hooks. Assigned by the adapter. */
   id: string;
+  /** Authenticated user identity, when the transport provides it. */
+  userId?: string | null;
+  /** Verified auth claims or other connection-scoped metadata. */
+  claims?: Record<string, unknown>;
+  /** Optional routing scope attached by the transport layer. */
+  scope?: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,7 +66,7 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
   /** Connections subscribed to state patches for this actor instance */
   private stateSubscribers = new Set<Connection>();
   /** All connections that have been seen (for lifecycle tracking) */
-  private knownConnections = new Set<string>();
+  private knownConnections = new Map<string, Connection>();
 
   constructor(actorName: string, actorId: string, def: TDef, initialState: unknown) {
     this.actorName = actorName;
@@ -136,11 +142,12 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
   }
 
   removeConnection(conn: Connection): void {
+    const known = this.knownConnections.get(conn.id);
     const wasKnown = this.knownConnections.delete(conn.id);
     this.eventSubscribers.delete(conn);
     this.stateSubscribers.delete(conn);
-    if (wasKnown) {
-      this.invokeLifecycle("onDisconnect", conn.id);
+    if (wasKnown && known) {
+      this.invokeLifecycle("onDisconnect", known);
     }
   }
 
@@ -150,11 +157,11 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
 
   trackConnect(conn: Connection): void {
     if (this.knownConnections.has(conn.id)) return;
-    this.knownConnections.add(conn.id);
-    this.invokeLifecycle("onConnect", conn.id);
+    this.knownConnections.set(conn.id, conn);
+    this.invokeLifecycle("onConnect", conn);
   }
 
-  private invokeLifecycle(hook: "onConnect" | "onDisconnect", connectionId: string): void {
+  private invokeLifecycle(hook: "onConnect" | "onDisconnect", conn: Connection): void {
     const handler = this.def.config[hook];
     if (!handler) return;
 
@@ -167,7 +174,14 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
 
         const draft = createDraft(this.state as any);
 
-        let result: unknown = handler({ state: draft, connectionId, emit });
+        let result: unknown = handler({
+          state: draft,
+          connectionId: conn.id,
+          userId: conn.userId ?? null,
+          claims: conn.claims ?? {},
+          scope: conn.scope,
+          emit,
+        });
         if (result instanceof Promise) await result;
 
         let patches: Patch[] = [];
@@ -208,7 +222,7 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
       this.queue.push({
         run: async () => {
           try {
-            const result = await this.executeMethod(method, input, conn.id);
+            const result = await this.executeMethod(method, input, conn);
             resolve(result);
           } catch (err) {
             reject(err);
@@ -229,7 +243,7 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
     this.processing = false;
   }
 
-  private async executeMethod(method: string, rawInput: unknown, connectionId: string): Promise<unknown> {
+  private async executeMethod(method: string, rawInput: unknown, conn: Connection): Promise<unknown> {
     const methodDef = this.def.config.methods[method];
     if (!methodDef) {
       throw new Error(`Unknown method: ${method}`);
@@ -254,7 +268,10 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
     for (const mw of middlewares) {
       const added = await mw({
         ctx,
-        connectionId,
+        connectionId: conn.id,
+        userId: conn.userId ?? null,
+        claims: conn.claims ?? {},
+        scope: conn.scope,
         actor: this.actorName,
         actorId: this.actorId,
         method,
@@ -277,7 +294,7 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
       state: draft,
       input: validatedInput,
       emit,
-      connectionId,
+      connectionId: conn.id,
       ctx,
     });
 

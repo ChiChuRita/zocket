@@ -1,6 +1,7 @@
 export type {
   InboundEnvelope,
   OutboundEnvelope,
+  RouteScope,
   SessionConnectedNotice,
   SessionDisconnectedNotice,
 } from "./types";
@@ -12,8 +13,8 @@ export {
   OUTBOUND_STREAM,
   inboundSubject,
   outboundSubject,
-  SESSION_CONNECTED,
-  SESSION_DISCONNECTED,
+  sessionConnectedSubject,
+  sessionDisconnectedSubject,
   ensureStreams,
   ensureConsumer,
 } from "./streams";

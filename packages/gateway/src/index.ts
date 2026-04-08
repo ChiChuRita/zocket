@@ -1,7 +1,8 @@
 import { connect } from "nats";
 import { ensureStreams } from "@zocket/nats-transport";
-import { SessionManager, type WsData } from "./session";
+import { SessionManager, type AuthorizedUpgradeData, type WsData } from "./session";
 import { NatsBridge } from "./nats-bridge";
+import { authorizeProject } from "./control-plane";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -9,6 +10,64 @@ import { NatsBridge } from "./nats-bridge";
 
 const NATS_URL = process.env.NATS_URL ?? "nats://localhost:4222";
 const PORT = parseInt(process.env.PORT ?? "3000", 10);
+
+async function authorizeRequest(req: Request): Promise<AuthorizedUpgradeData> {
+  const url = new URL(req.url);
+  const token = url.searchParams.get("token");
+  const host = req.headers.get("host");
+
+  if (!host) {
+    throw new Error("Missing host header");
+  }
+
+  const payload = await authorizeProject(host, token);
+  return {
+    scope: {
+      workspaceId: payload.workspaceId,
+      projectId: payload.projectId,
+    },
+    userId: payload.userId,
+    claims: payload.claims ?? {},
+  };
+}
+
+function handleHealthCheck(req: Request): Response | null {
+  const pathname = new URL(req.url).pathname;
+  if (pathname !== "/health") {
+    return null;
+  }
+
+  return new Response(
+    JSON.stringify({
+      ok: true,
+    }),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
+  );
+}
+
+async function handleGatewayRequest(req: Request, server: Bun.Server<WsData>) {
+  try {
+    const health = handleHealthCheck(req);
+    if (health) {
+      return health;
+    }
+
+    const authorized = await authorizeRequest(req);
+    const upgraded = server.upgrade(req, {
+      data: {
+        session: null!,
+        authorized,
+      },
+    });
+    if (upgraded) return undefined;
+    return new Response("Zocket Gateway — WebSocket upgrade required", { status: 426 });
+  } catch (error: any) {
+    return new Response(error?.message ?? "Unauthorized", { status: 401 });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Connect to NATS
@@ -39,26 +98,22 @@ console.log("[gateway] JetStream streams ready");
 const sessions = new SessionManager();
 const bridge = new NatsBridge(js, nc, sessions);
 
-// ---------------------------------------------------------------------------
-// Bun WebSocket server
-// ---------------------------------------------------------------------------
-
 Bun.serve<WsData>({
   port: PORT,
 
   fetch(req, server) {
-    const upgraded = server.upgrade(req, { data: { session: null! } });
-    if (upgraded) return undefined;
-    return new Response("Zocket Gateway — WebSocket upgrade required", { status: 426 });
+    return handleGatewayRequest(req, server);
   },
 
   websocket: {
     open(ws) {
-      const session = sessions.createSession(ws);
+      const session = sessions.createSession(ws, ws.data.authorized);
       ws.data.session = session;
       bridge.startOutboundConsumer(session);
       bridge.notifyConnected(session);
-      console.log(`[gateway] Session ${session.sessionId} connected`);
+      console.log(
+        `[gateway] Session ${session.sessionId} connected (${session.scope.workspaceId}/${session.scope.projectId})`,
+      );
     },
 
     message(ws, data) {

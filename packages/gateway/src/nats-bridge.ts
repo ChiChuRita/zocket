@@ -11,8 +11,8 @@ import {
   inboundSubject,
   outboundSubject,
   OUTBOUND_STREAM,
-  SESSION_CONNECTED,
-  SESSION_DISCONNECTED,
+  sessionConnectedSubject,
+  sessionDisconnectedSubject,
 } from "@zocket/nats-transport";
 import type { SessionInfo, SessionManager } from "./session";
 
@@ -42,12 +42,20 @@ export class NatsBridge {
       }
 
       const envelope: InboundEnvelope = {
+        scope: session.scope,
         sessionId: session.sessionId,
+        userId: session.userId,
+        claims: session.claims,
         message: msg,
       };
 
       await this.js.publish(
-        inboundSubject(msg.actor, msg.actorId),
+        inboundSubject(
+          session.scope.workspaceId,
+          session.scope.projectId,
+          msg.actor,
+          msg.actorId,
+        ),
         encode(envelope),
       );
     } catch (err) {
@@ -62,7 +70,13 @@ export class NatsBridge {
   async startOutboundConsumer(session: SessionInfo): Promise<void> {
     try {
       const consumer = await this.js.consumers.get(OUTBOUND_STREAM, {
-        filterSubjects: [outboundSubject(session.sessionId)],
+        filterSubjects: [
+          outboundSubject(
+            session.scope.workspaceId,
+            session.scope.projectId,
+            session.sessionId,
+          ),
+        ],
       });
 
       const sub = await consumer.consume();
@@ -104,10 +118,15 @@ export class NatsBridge {
    */
   notifyConnected(session: SessionInfo): void {
     const notice: SessionConnectedNotice = {
+      scope: session.scope,
       sessionId: session.sessionId,
+      userId: session.userId,
       connectedAt: Date.now(),
     };
-    this.nc.publish(SESSION_CONNECTED, encode(notice));
+    this.nc.publish(
+      sessionConnectedSubject(session.scope.workspaceId, session.scope.projectId),
+      encode(notice),
+    );
   }
 
   /**
@@ -115,9 +134,13 @@ export class NatsBridge {
    */
   notifyDisconnected(session: SessionInfo): void {
     const notice: SessionDisconnectedNotice = {
+      scope: session.scope,
       sessionId: session.sessionId,
       disconnectedAt: Date.now(),
     };
-    this.nc.publish(SESSION_DISCONNECTED, encode(notice));
+    this.nc.publish(
+      sessionDisconnectedSubject(session.scope.workspaceId, session.scope.projectId),
+      encode(notice),
+    );
   }
 }

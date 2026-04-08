@@ -2,20 +2,29 @@ import type { ClientMessage, ServerMessage } from "@zocket/core/types";
 
 // ---------------------------------------------------------------------------
 // Inbound envelope (Gateway → Runtime via JetStream)
-// Published to subject: inbound.{actorType}.{actorId}
+// Published to subject: inbound.{workspaceId}.{projectId}.{actorType}.{actorId}
 // ---------------------------------------------------------------------------
 
+export interface RouteScope {
+  workspaceId: string;
+  projectId: string;
+}
+
 export interface InboundEnvelope {
+  scope: RouteScope;
   sessionId: string;
+  userId: string | null;
+  claims: Record<string, unknown>;
   message: ClientMessage;
 }
 
 // ---------------------------------------------------------------------------
 // Outbound envelope (Runtime → Gateway via JetStream)
-// Published to subject: outbound.{sessionId}
+// Published to subject: outbound.{workspaceId}.{projectId}.{sessionId}
 // ---------------------------------------------------------------------------
 
 export interface OutboundEnvelope {
+  scope: RouteScope;
   sessionId: string;
   message: ServerMessage;
 }
@@ -25,11 +34,14 @@ export interface OutboundEnvelope {
 // ---------------------------------------------------------------------------
 
 export interface SessionConnectedNotice {
+  scope: RouteScope;
   sessionId: string;
+  userId: string | null;
   connectedAt: number;
 }
 
 export interface SessionDisconnectedNotice {
+  scope: RouteScope;
   sessionId: string;
   disconnectedAt: number;
 }

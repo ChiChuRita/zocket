@@ -4,7 +4,7 @@ import type { InboundEnvelope } from "@zocket/nats-transport";
 import {
   decode,
   INBOUND_STREAM,
-  SESSION_DISCONNECTED,
+  sessionDisconnectedSubject,
 } from "@zocket/nats-transport";
 import { VirtualConnection } from "./virtual-connection";
 
@@ -24,6 +24,7 @@ export class ConsumerManager {
     private readonly js: JetStreamClient,
     private readonly nc: NatsConnection,
     private readonly handlers: HandlerCallbacks,
+    private readonly scope: { workspaceId: string; projectId: string },
   ) {}
 
   /**
@@ -34,7 +35,10 @@ export class ConsumerManager {
     this.stopped = false;
 
     // Listen for session disconnects on core NATS
-    this.sessionSub = this.nc.subscribe(SESSION_DISCONNECTED, {
+    this.sessionSub = this.nc.subscribe(sessionDisconnectedSubject(
+      this.scope.workspaceId,
+      this.scope.projectId,
+    ), {
       callback: (_err, msg) => {
         if (_err || this.stopped) return;
         try {
@@ -82,7 +86,7 @@ export class ConsumerManager {
   }
 
   private async consumeActorType(actorType: string): Promise<void> {
-    const consumerName = `rt-${actorType}`;
+    const consumerName = `rt-${this.scope.workspaceId}-${this.scope.projectId}-${actorType}`;
 
     const consumer = await this.js.consumers.get(INBOUND_STREAM, consumerName);
     const messages = await consumer.consume();
@@ -102,7 +106,11 @@ export class ConsumerManager {
   }
 
   private async handleInbound(envelope: InboundEnvelope): Promise<void> {
-    const conn = this.getOrCreateConnection(envelope.sessionId);
+    const conn = this.getOrCreateConnection(
+      envelope.sessionId,
+      envelope.userId,
+      envelope.claims,
+    );
     await this.handlers.onMessage(conn, JSON.stringify(envelope.message));
   }
 
@@ -113,10 +121,14 @@ export class ConsumerManager {
     this.connections.delete(sessionId);
   }
 
-  private getOrCreateConnection(sessionId: string): VirtualConnection {
+  private getOrCreateConnection(
+    sessionId: string,
+    userId: string | null,
+    claims: Record<string, unknown>,
+  ): VirtualConnection {
     let conn = this.connections.get(sessionId);
     if (!conn) {
-      conn = new VirtualConnection(sessionId, this.js);
+      conn = new VirtualConnection(sessionId, this.js, this.scope, userId, claims);
       this.connections.set(sessionId, conn);
       this.handlers.onConnection(conn);
     }

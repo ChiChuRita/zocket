@@ -5,6 +5,8 @@
     "build": "bun run --workspaces build",
     "clean": "bunx tsdown -W --clean",
     "changeset": "changeset",
+    "platform:dev": "bun ./scripts/platform-dev.ts",
+    "platform:push": "bun ./scripts/platform-push.ts",
     "version-packages": "changeset version",
     "release": "bun run build && changeset publish"
   },
@@ -18,7 +20,7 @@
     "old/*",
     "packages/*",
     "docs",
-    "user-bundle",
+    "platform",
     "examples/*",
     "examples/*/client"
   ]

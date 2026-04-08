@@ -171,4 +171,77 @@ a {
       hsla(0, 0%, 77%, 0) 70.86%
     );
   }
+
+  /* ── Animated gradient text ──────────────────────── */
+  .shimmer-text {
+    background: linear-gradient(
+      110deg,
+      hsl(28 100% 52%) 0%,
+      hsl(32 100% 65%) 40%,
+      hsl(38 100% 75%) 50%,
+      hsl(32 100% 65%) 60%,
+      hsl(28 100% 52%) 100%
+    );
+    background-size: 250% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 4s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 100% center; }
+    100% { background-position: -100% center; }
+  }
+
+  /* ── Blinking terminal cursor ────────────────────── */
+  .terminal-cursor::after {
+    content: "▋";
+    animation: cursor-blink 1.1s step-end infinite;
+    color: hsl(30 100% 50% / 0.5);
+    margin-left: 2px;
+    font-size: 0.85em;
+  }
+
+  @keyframes cursor-blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+
+  /* ── Pulsing status dot ──────────────────────────── */
+  .pulse-dot {
+    animation: pulse-glow 2.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 4px rgba(52, 211, 153, 0.4), 0 0 8px rgba(52, 211, 153, 0.15); }
+    50% { box-shadow: 0 0 8px rgba(52, 211, 153, 0.7), 0 0 20px rgba(52, 211, 153, 0.25); }
+  }
+
+  /* ── Card with gradient top accent ───────────────── */
+  .accent-card {
+    position: relative;
+    overflow: hidden;
+  }
+  .accent-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 15%;
+    right: 15%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--card-accent, hsl(30 100% 50% / 0.4)), transparent);
+    z-index: 1;
+  }
+  .accent-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 20%;
+    right: 20%;
+    height: 40px;
+    background: radial-gradient(ellipse at top, var(--card-accent, hsl(30 100% 50% / 0.06)), transparent);
+    pointer-events: none;
+    z-index: 0;
+  }
 }

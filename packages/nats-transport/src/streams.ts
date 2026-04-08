@@ -16,20 +16,34 @@ export const OUTBOUND_STREAM = "OUTBOUND";
 // Subject helpers
 // ---------------------------------------------------------------------------
 
-export function inboundSubject(actorType: string, actorId: string): string {
-  return `inbound.${actorType}.${actorId}`;
+export function inboundSubject(
+  workspaceId: string,
+  projectId: string,
+  actorType: string,
+  actorId: string,
+): string {
+  return `inbound.${workspaceId}.${projectId}.${actorType}.${actorId}`;
 }
 
-export function outboundSubject(sessionId: string): string {
-  return `outbound.${sessionId}`;
+export function outboundSubject(
+  workspaceId: string,
+  projectId: string,
+  sessionId: string,
+): string {
+  return `outbound.${workspaceId}.${projectId}.${sessionId}`;
 }
 
 // ---------------------------------------------------------------------------
 // Session lifecycle subjects (core NATS pub/sub)
 // ---------------------------------------------------------------------------
 
-export const SESSION_CONNECTED = "session.connected";
-export const SESSION_DISCONNECTED = "session.disconnected";
+export function sessionConnectedSubject(workspaceId: string, projectId: string): string {
+  return `session.connected.${workspaceId}.${projectId}`;
+}
+
+export function sessionDisconnectedSubject(workspaceId: string, projectId: string): string {
+  return `session.disconnected.${workspaceId}.${projectId}`;
+}
 
 // ---------------------------------------------------------------------------
 // Stream + consumer setup (idempotent)

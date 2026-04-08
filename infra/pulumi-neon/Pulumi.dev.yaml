@@ -1,0 +1,7 @@
+environment:
+  - zocket/platform-dev
+config:
+  neon:apiKey:
+    secure: AAABAOVhFbUR64qkuchGOUx+opt5P3TZ/gGunG+eH62TMPOQzWFWVx9C0ncR5f7XB+LD8rYlwxV3gvE9VJpNsE8ZkDgq3QOLNX+bk8VOQoyUXkp6BkYSZL/i/c8WYUNvkPC2ZQY=
+  zocket:neonOrgId: org-royal-salad-29354873
+  zocket:neonRegionId: aws-us-east-1

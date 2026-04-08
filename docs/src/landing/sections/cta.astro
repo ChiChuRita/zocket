@@ -1,108 +1,18 @@
 ---
 import { Button } from "../components/ui/button";
-import CodeBlock from "../components/code-block.astro";
-
-const installCode = `bun add @zocket/core @zocket/server @zocket/client zod`;
-
-const actorCode = `import { actor, createApp } from "@zocket/core";
-import { z } from "zod";
-
-const SupportThread = actor({
-  state: z.object({
-    status: z.enum(["open", "closed"]).default("open"),
-    messages: z.array(z.string()).default([]),
-  }),
-  methods: {
-    reply: {
-      input: z.object({ text: z.string() }),
-      handler: ({ state, input }) => {
-        state.messages.push(input.text);
-      },
-    },
-  },
-});
-
-export const app = createApp({ actors: { support: SupportThread } });`;
-
-const clientCode = `import { createClient } from "@zocket/client";
-import type { app } from "./server";
-
-const client = createClient<typeof app>({ url: "ws://localhost:3000" });
-const thread = client.support("thread-42");
-
-await thread.reply({ text: "Can you resend the invoice?" });
-thread.state.subscribe((state) => console.log(state.messages));`;
 ---
 
-<section class="relative flex flex-col gap-3">
+<section class="reveal relative flex flex-col items-center gap-6 text-center">
   <div class="section-glow bg-primary"></div>
-  <header class="reveal">
-    <h1>ready to <span class="text-primary">build</span>?</h1>
-    <h3 class="max-w-lg">
-      Start with one live actor, run it locally, and hand the client a typed
-      handle. The rest of the product can grow from there.
-    </h3>
-  </header>
 
-  <div class="reveal flex flex-col gap-6">
-    <!-- Step 1 -->
-    <div class="flex flex-col gap-2">
-      <div class="flex items-center gap-3">
-        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-bold text-black">1</span>
-        <h2>Install</h2>
-      </div>
-      <h3 class="!mt-0">Bring in the runtime pieces you need for actors, server, and client.</h3>
-      <div class="max-w-xl">
-        <CodeBlock title="terminal" code={installCode} lang="bash" />
-      </div>
-    </div>
-
-    <!-- Step 2 -->
-    <div class="flex flex-col gap-2">
-      <div class="flex items-center gap-3">
-        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-bold text-black">2</span>
-        <h2>Define a live actor</h2>
-      </div>
-      <h3 class="!mt-0">
-        Put the entity where your product actually lives in one place: state,
-        methods, and the rules around it.
-      </h3>
-      <div class="max-w-2xl">
-        <CodeBlock title="server.ts" code={actorCode} />
-      </div>
-    </div>
-
-    <!-- Step 3 -->
-    <div class="flex flex-col gap-2">
-      <div class="flex items-center gap-3">
-        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-bold text-black">3</span>
-        <h2>Connect a typed client handle</h2>
-      </div>
-      <h3 class="!mt-0">
-        Import the server type, connect to a specific actor instance, call
-        methods, and subscribe to the state it owns.
-      </h3>
-      <div class="max-w-2xl">
-        <CodeBlock title="client.ts" code={clientCode} />
-      </div>
-    </div>
+  <div class="terminal-cursor flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-5 py-3 font-mono text-sm text-white/40">
+    <span class="text-primary/60">$</span>
+    <span>bun add @zocket/core @zocket/server @zocket/client zod</span>
   </div>
 
-  <div class="reveal flex flex-row gap-3 pt-4">
-    <a href="/getting-started/" class="w-fit">
-      <Button className="text-base px-6" size="lg">
-        Start Building
-      </Button>
-    </a>
-    <a href="https://github.com/ChiChuRita/zocket" class="flex w-fit">
-      <Button
-        variant={"secondary"}
-        className="text-base flex gap-2 px-6"
-        size="lg"
-      >
-        <img src="/github-mark-white.svg" class="h-4 w-4" alt="GitHub" />
-        View Source
-      </Button>
-    </a>
-  </div>
+  <a href="/getting-started/" class="w-fit">
+    <Button className="text-base px-8" size="lg">
+      Read the Docs
+    </Button>
+  </a>
 </section>

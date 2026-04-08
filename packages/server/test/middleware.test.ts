@@ -1,7 +1,9 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { z } from "zod";
 import { actor, createApp, middleware } from "../../core/src/index";
+import { MSG } from "../../core/src/protocol";
 import { serve } from "../src/adapters/bun";
+import { createHandlers } from "../src/index";
 import { createClient } from "../../client/src/index";
 
 // ---------------------------------------------------------------------------
@@ -275,6 +277,134 @@ describe("Middleware", () => {
       client.$close();
       server.stop(true);
     }
+  });
+
+  test("middleware receives transport auth metadata", async () => {
+    const authed = middleware().use(async ({ connectionId, userId, claims, scope }) => {
+      return {
+        connectionId,
+        userId,
+        role: claims.role,
+        workspaceId: scope?.workspaceId ?? null,
+        projectId: scope?.projectId ?? null,
+      };
+    });
+
+    const MyActor = authed.actor({
+      state: z.object({}).default({}),
+      methods: {
+        getSession: {
+          handler: ({ ctx }) => ctx,
+        },
+      },
+    });
+
+    const handlers = createHandlers(createApp({ actors: { my: MyActor } }));
+    const sent: string[] = [];
+    const connection = {
+      id: "session-1",
+      userId: "user-123",
+      claims: { role: "admin", sub: "user-123" },
+      scope: { workspaceId: "ws-1", projectId: "prj-1" },
+      send(message: string) {
+        sent.push(message);
+      },
+    };
+
+    await handlers.onMessage(connection, JSON.stringify({
+      type: MSG.RPC,
+      id: "rpc-1",
+      actor: "my",
+      actorId: "inst-1",
+      method: "getSession",
+    }));
+
+    expect(sent).toHaveLength(1);
+    expect(JSON.parse(sent[0])).toEqual({
+      type: MSG.RPC_RESULT,
+      id: "rpc-1",
+      result: {
+        connectionId: "session-1",
+        userId: "user-123",
+        role: "admin",
+        workspaceId: "ws-1",
+        projectId: "prj-1",
+      },
+    });
+  });
+
+  test("lifecycle hooks receive transport auth metadata", async () => {
+    const MyActor = actor({
+      state: z.object({
+        connections: z.array(
+          z.object({
+            connectionId: z.string(),
+            userId: z.union([z.string(), z.null()]),
+            projectId: z.union([z.string(), z.null()]),
+            role: z.union([z.string(), z.null()]),
+          }),
+        ).default([]),
+        disconnected: z.array(z.string()).default([]),
+      }),
+      methods: {
+        ping: {
+          handler: () => "pong",
+        },
+      },
+      onConnect({ state, connectionId, userId, claims, scope }) {
+        state.connections.push({
+          connectionId,
+          userId,
+          projectId: scope?.projectId ?? null,
+          role: typeof claims.role === "string" ? claims.role : null,
+        });
+      },
+      onDisconnect({ state, connectionId }) {
+        state.disconnected.push(connectionId);
+      },
+    });
+
+    const handlers = createHandlers(createApp({ actors: { my: MyActor } }));
+    const connection = {
+      id: "session-2",
+      userId: "user-456",
+      claims: { role: "member" },
+      scope: { workspaceId: "ws-1", projectId: "prj-9" },
+      send(_message: string) {},
+    };
+
+    await handlers.onMessage(connection, JSON.stringify({
+      type: MSG.STATE_SUB,
+      actor: "my",
+      actorId: "inst-2",
+    }));
+
+    const instance = await handlers.manager.getOrCreate("my", "inst-2");
+    expect(instance.getState()).toEqual({
+      connections: [
+        {
+          connectionId: "session-2",
+          userId: "user-456",
+          projectId: "prj-9",
+          role: "member",
+        },
+      ],
+      disconnected: [],
+    });
+
+    handlers.onClose(connection);
+
+    expect(instance.getState()).toEqual({
+      connections: [
+        {
+          connectionId: "session-2",
+          userId: "user-456",
+          projectId: "prj-9",
+          role: "member",
+        },
+      ],
+      disconnected: ["session-2"],
+    });
   });
 
   test("middleware does NOT run for lifecycle hooks", async () => {

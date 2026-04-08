@@ -15,6 +15,9 @@ import type {
 export interface MiddlewareArgs<TCtx> {
   ctx: TCtx;
   connectionId: string;
+  userId: string | null;
+  claims: Record<string, unknown>;
+  scope?: Record<string, string>;
   actor: string;
   actorId: string;
   method: string;

@@ -1,6 +1,7 @@
 import type { JetStreamClient } from "nats";
 import type { Connection } from "@zocket/server";
 import type { OutboundEnvelope } from "@zocket/nats-transport";
+import type { RouteScope } from "@zocket/nats-transport";
 import { encode, outboundSubject } from "@zocket/nats-transport";
 
 /**
@@ -17,17 +18,24 @@ export class VirtualConnection implements Connection {
   constructor(
     public readonly sessionId: string,
     private readonly js: JetStreamClient,
+    public readonly scope: RouteScope,
+    public readonly userId: string | null,
+    public readonly claims: Record<string, unknown>,
   ) {
     this.id = sessionId;
   }
 
   send(message: string): void {
     const envelope: OutboundEnvelope = {
+      scope: this.scope,
       sessionId: this.sessionId,
       message: JSON.parse(message),
     };
     // Fire-and-forget publish. JetStream on a local NATS node is reliable;
     // production would want to handle the PubAck promise.
-    this.js.publish(outboundSubject(this.sessionId), encode(envelope));
+    this.js.publish(
+      outboundSubject(this.scope.workspaceId, this.scope.projectId, this.sessionId),
+      encode(envelope),
+    );
   }
 }

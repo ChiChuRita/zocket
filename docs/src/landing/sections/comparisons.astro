@@ -1,5 +1,329 @@
 ---
+import { createHighlighter } from "shiki";
 import { ComparisonShowcase } from "../components/comparison-showcase";
+
+const highlighter = await createHighlighter({
+  themes: ["github-dark"],
+  langs: ["typescript", "tsx"],
+});
+
+function hl(code: string): string {
+  const html = highlighter.codeToHtml(code.trim(), {
+    lang: "typescript",
+    theme: "github-dark",
+  });
+  // Strip the wrapping <pre><code>...</code></pre> — we handle that ourselves
+  return html
+    .replace(/^<pre[^>]*><code[^>]*>/, "")
+    .replace(/<\/code><\/pre>$/, "");
+}
+
+const comparisons = [
+  {
+    id: "socketio",
+    competitor: "Socket.io",
+    useCase: "Chat Room",
+    description: "A chat room with message history and online presence.",
+    competitorFile: "server.ts",
+    competitorHtml: hl(`const io = new Server(3000);
+const rooms = new Map();
+
+io.on("connection", (socket) => {
+  let room = null, name = null;
+
+  socket.on("join", ({ room: r, name: n }) => {
+    room = r; name = n;
+    socket.join(r);
+    const state = getRoom(r);
+    state.online.add(n);
+    socket.emit("history", state.messages);
+    io.to(r).emit("presence", [...state.online]);
+  });
+
+  socket.on("sendMessage", ({ text }) => {
+    if (!room || !name) return;
+    const msg = { from: name, text };
+    getRoom(room).messages.push(msg);
+    io.to(room).emit("newMessage", msg);
+  });
+
+  socket.on("disconnect", () => {
+    if (!room || !name) return;
+    getRoom(room).online.delete(name);
+    io.to(room).emit("presence", [...]);
+  });
+});`),
+    zocketFile: "chat.ts",
+    zocketHtml: hl(`const ChatRoom = actor({
+  state: z.object({
+    messages: z.array(z.object({
+      from: z.string(),
+      text: z.string(),
+    })).default([]),
+    online: z.array(z.string()).default([]),
+  }),
+
+  methods: {
+    join: {
+      input: z.object({ name: z.string() }),
+      handler: ({ state, input }) => {
+        state.online.push(input.name);
+      },
+    },
+    sendMessage: {
+      input: z.object({ from: z.string(), text: z.string() }),
+      handler: ({ state, input }) => {
+        state.messages.push(input);
+      },
+    },
+  },
+
+  onDisconnect({ state, connectionId }) {
+    const i = state.online.indexOf(connectionId);
+    if (i !== -1) state.online.splice(i, 1);
+  },
+});`),
+    takeaway: "No manual broadcasting, no room management, no untyped events. State syncs automatically.",
+  },
+  {
+    id: "liveblocks",
+    competitor: "Liveblocks",
+    useCase: "Live Cursors",
+    description: "Users see each other's cursors in real-time on a shared canvas.",
+    competitorFile: "app.tsx",
+    competitorHtml: hl(`import {
+  LiveblocksProvider,
+  RoomProvider,
+  useOthers,
+  useUpdateMyPresence,
+} from "@liveblocks/react";
+
+const client = createClient({
+  publicApiKey: "pk_live_xxx",
+});
+
+function Cursors() {
+  const others = useOthers();
+  const update = useUpdateMyPresence();
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      update({ x: e.clientX, y: e.clientY });
+    };
+    window.addEventListener("mousemove", h);
+    return () => window.removeEventListener("mousemove", h);
+  }, []);
+
+  return others.map(({ connectionId, presence }) => (
+    <Cursor key={connectionId} x={presence.x} y={presence.y} />
+  ));
+}
+
+// Must wrap in LiveblocksProvider + RoomProvider
+// Data goes through Liveblocks servers
+// Pricing per monthly active user`),
+    zocketFile: "cursors.ts + app.tsx",
+    zocketHtml: hl(`// Server
+const Workspace = actor({
+  state: z.object({
+    cursors: z.record(z.object({
+      x: z.number(), y: z.number(), name: z.string(),
+    })).default({}),
+  }),
+  methods: {
+    updateCursor: {
+      input: z.object({ x: z.number(), y: z.number(), name: z.string() }),
+      handler: ({ state, input, connectionId }) => {
+        state.cursors[connectionId] = input;
+      },
+    },
+  },
+  onDisconnect({ state, connectionId }) {
+    delete state.cursors[connectionId];
+  },
+});
+
+// Client
+function Cursors() {
+  const ws = useActor("workspace", "main");
+  const cursors = useActorState(ws, s => s.cursors);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      ws.updateCursor({ x: e.clientX, y: e.clientY, name: "Alice" });
+    };
+    window.addEventListener("mousemove", h);
+    return () => window.removeEventListener("mousemove", h);
+  }, []);
+
+  return Object.entries(cursors ?? {}).map(([id, c]) => (
+    <Cursor key={id} x={c.x} y={c.y} name={c.name} />
+  ));
+}`),
+    takeaway: "Self-hosted, no vendor lock-in, no per-user pricing. Same DX, you own the data.",
+  },
+  {
+    id: "rivet",
+    competitor: "Rivet",
+    useCase: "Game Match",
+    description: "Players join a lobby, match starts, server tracks scores.",
+    competitorFile: "match.ts",
+    competitorHtml: hl(`class MatchActor extends Actor {
+  override initialize() {
+    return {
+      players: [],
+      phase: "lobby",
+      round: 0,
+    };
+  }
+
+  join(rpc, playerId) {
+    this.state.players.push({ id: playerId, score: 0 });
+    this.broadcast("playerJoined", { playerId });
+  }
+
+  startRound(rpc) {
+    this.state.phase = "playing";
+    this.state.round += 1;
+    this.broadcast("roundStarted", { round: this.state.round });
+  }
+
+  submitAnswer(rpc, playerId, correct) {
+    const p = this.state.players.find(p => p.id === playerId);
+    if (p && correct) p.score += 10;
+    this.broadcast("scoreUpdate", { players: this.state.players });
+  }
+}
+
+// Client
+const match = await client.get({ name: "match", id: "match-123" });
+match.on("scoreUpdate", (data) => { /* untyped */ });
+await match.submitAnswer("player-1", true);`),
+    zocketFile: "match.ts",
+    zocketHtml: hl(`const Match = actor({
+  state: z.object({
+    players: z.array(z.object({
+      id: z.string(), score: z.number(),
+    })).default([]),
+    phase: z.enum(["lobby", "playing", "finished"]).default("lobby"),
+    round: z.number().default(0),
+  }),
+
+  methods: {
+    join: {
+      input: z.object({ playerId: z.string() }),
+      handler: ({ state, input }) => {
+        state.players.push({ id: input.playerId, score: 0 });
+      },
+    },
+    startRound: {
+      handler: ({ state }) => { state.phase = "playing"; state.round++; },
+    },
+    submitAnswer: {
+      input: z.object({ playerId: z.string(), correct: z.boolean() }),
+      handler: ({ state, input }) => {
+        const p = state.players.find(p => p.id === input.playerId);
+        if (p && input.correct) p.score += 10;
+      },
+    },
+  },
+});
+
+// Client — fully typed, state syncs automatically
+const match = client.match("match-123");
+match.state.subscribe(s => {
+  console.log(s.phase);   // "lobby" | "playing" | "finished"
+  console.log(s.players); // { id: string; score: number }[]
+});
+await match.submitAnswer({ playerId: "p1", correct: true });`),
+    takeaway: "Same actor model, but typed end-to-end. State syncs automatically instead of manual broadcast calls.",
+  },
+  {
+    id: "temporal",
+    competitor: "Temporal",
+    useCase: "AI Agent",
+    description: "Call an LLM, execute tools, timeout if too slow.",
+    competitorFile: "workflow.ts + activities.ts + worker.ts",
+    competitorHtml: hl(`// workflow.ts — must be deterministic (no Date.now, no I/O)
+const { callLLM, executeTool } = proxyActivities({
+  startToCloseTimeout: "30s",
+});
+
+export async function agentWorkflow(prompt: string) {
+  const response = await callLLM(prompt);
+
+  for (const tool of response.toolCalls) {
+    await executeTool(tool.name, tool.args);
+  }
+
+  return await Promise.race([
+    saveResult(response),
+    sleep("30s").then(() => "Timeout"),
+  ]);
+}
+
+// activities.ts — where actual work happens
+export async function callLLM(prompt: string) { /* ... */ }
+export async function executeTool(name: string, args: unknown) { /* ... */ }
+
+// worker.ts — run the engine
+const worker = await Worker.create({
+  workflowsPath: require.resolve("./workflows"),
+  activities,
+  taskQueue: "agent-tasks",
+});
+await worker.run();
+
+// client.ts — start workflow, poll for result (no streaming)
+const handle = await client.workflow.start("agentWorkflow", {
+  args: ["Summarize this"], taskQueue: "agent-tasks",
+});
+const result = await handle.result(); // blocks until done`),
+    zocketFile: "agent.ts",
+    zocketHtml: hl(`const AgentRun = actor({
+  state: z.object({
+    messages: z.array(z.any()).default([]),
+    status: z.enum(["idle", "running", "done", "timeout"]).default("idle"),
+  }),
+
+  methods: {
+    start: {
+      input: z.object({ prompt: z.string() }),
+      stream: true,
+      handler: async ({ state, input, timer }) => {
+        state.status = "running";
+        timer.after(30_000).timeout();
+
+        const result = streamText({
+          model: openai("gpt-4o"),
+          messages: [{ role: "user", content: input.prompt }],
+        });
+
+        for await (const chunk of result.textStream) {
+          state.messages.push({ role: "assistant", content: chunk });
+        }
+
+        state.status = "done";
+      },
+    },
+    timeout: {
+      handler: ({ state }) => {
+        if (state.status === "running") state.status = "timeout";
+      },
+    },
+  },
+});
+
+// Client — real-time streaming, no polling
+const agent = client.agent("run-123");
+agent.state.subscribe(s => {
+  console.log(s.status);   // updates live
+  console.log(s.messages); // tokens stream in real-time
+});
+await agent.start({ prompt: "Summarize this" });`),
+    takeaway: "One file instead of four. Real-time streaming instead of polling. No replay semantics to reason about.",
+  },
+];
 ---
 
 <section class="relative flex flex-col gap-8">
@@ -15,6 +339,20 @@ import { ComparisonShowcase } from "../components/comparison-showcase";
   </header>
 
   <div class="reveal">
-    <ComparisonShowcase client:visible />
+    <ComparisonShowcase comparisons={comparisons} client:visible />
   </div>
 </section>
+
+<style is:global>
+  .comparison-code pre {
+    background: transparent !important;
+    margin: 0;
+    padding: 0;
+  }
+  .comparison-code code {
+    background: transparent !important;
+  }
+  .comparison-code .line {
+    display: block;
+  }
+</style>

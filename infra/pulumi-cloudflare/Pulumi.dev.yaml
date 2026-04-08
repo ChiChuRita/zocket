@@ -1,0 +1,6 @@
+environment:
+  - zocket/platform-dev
+config:
+  cloudflare:apiToken:
+    secure: AAABAFd78bDtFIipG2e22eN+OydFypaaqm7SwwmogpXV2CVEj6iz6SBMZE5nfKBR+6vTnwGi+WTPAMVq4zURj0dPqmb/nrtAqsU8fvVkajm3o+GJmQ==
+  zocket:cloudflareAccountId: cb853e276a7a1c77967c7859973c8ca0

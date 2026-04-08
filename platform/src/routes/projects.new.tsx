@@ -5,10 +5,7 @@ import { Button } from "../components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
-  CardHeader,
-  CardTitle,
 } from "../components/ui/card";
 import {
   Field,
@@ -55,12 +52,12 @@ function NewProjectPage() {
   });
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <Card>
-        <CardHeader>
-          <CardTitle>Create project</CardTitle>
-          <CardDescription>Create a new project and link your CLI to it.</CardDescription>
-        </CardHeader>
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-2">
+        <h1 className="font-heading text-3xl font-bold tracking-tight">Create project</h1>
+        <p className="text-muted-foreground">Create a new project and link your CLI to it.</p>
+      </div>
+      <Card className="max-w-2xl">
         <form
           onSubmit={async (event) => {
             event.preventDefault();
@@ -68,7 +65,7 @@ function NewProjectPage() {
             await createProjectMutation.mutateAsync();
           }}
         >
-          <CardContent>
+          <CardContent className="pt-6">
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="project-name">Name</FieldLabel>

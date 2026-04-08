@@ -58,46 +58,60 @@ function ProjectDetailPage() {
   });
 
   if (!session.ready) {
-    return <p>Loading project…</p>;
+    return (
+      <div className="flex items-center gap-3 py-16 text-muted-foreground">
+        <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+        <span className="text-sm">Loading project...</span>
+      </div>
+    );
   }
 
   if (!session.workosUser?.email) {
-    return <p>Sign in to view project details.</p>;
+    return <p className="py-16 text-muted-foreground">Sign in to view project details.</p>;
   }
 
   if (projectQuery.isLoading) {
-    return <div>Loading project…</div>;
+    return (
+      <div className="flex items-center gap-3 py-16 text-muted-foreground">
+        <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+        <span className="text-sm">Loading project...</span>
+      </div>
+    );
   }
 
   const project = projectQuery.data?.project ?? null;
   const tokenPreview = createDeployTokenMutation.data?.token ?? null;
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3">
-            <CardTitle>{project?.name ?? slug}</CardTitle>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge>{project?.domain ?? "loading"}</Badge>
-            </div>
-          </div>
-          <CardDescription>
-            Stable project domain and deployment target for your Zocket app.
-          </CardDescription>
-        </CardHeader>
-        <Separator />
-        <CardContent className="pt-6">
-          <Alert>
-            <AlertTitle>{project?.activeDeploymentId ? "Deployed" : "Not deployed yet"}</AlertTitle>
-            <AlertDescription>
-              {project?.activeDeploymentId
-                ? `Connect clients to wss://${project.domain} and deploy new bundles from the Zocket CLI.`
-                : `This project has a stable domain at wss://${project?.domain ?? slug}. Run zocket link and zocket deploy to upload the first bundle.`}
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <div
+            className={`h-3 w-3 rounded-full ${project?.activeDeploymentId ? "bg-primary animate-pulse" : "bg-muted-foreground/40"}`}
+          />
+          <h1 className="font-heading text-3xl font-bold tracking-tight">
+            {project?.name ?? slug}
+          </h1>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline">{project?.domain ?? "loading"}</Badge>
+          <Badge variant={project?.activeDeploymentId ? "default" : "secondary"}>
+            {project?.activeDeploymentId ? "Deployed" : "Not deployed"}
+          </Badge>
+        </div>
+        <p className="text-muted-foreground">
+          Stable project domain and deployment target for your Zocket app.
+        </p>
+      </div>
+
+      <Alert>
+        <AlertTitle>{project?.activeDeploymentId ? "Deployed" : "Not deployed yet"}</AlertTitle>
+        <AlertDescription>
+          {project?.activeDeploymentId
+            ? `Connect clients to wss://${project.domain} and deploy new bundles from the Zocket CLI.`
+            : `This project has a stable domain at wss://${project?.domain ?? slug}. Run zocket link and zocket deploy to upload the first bundle.`}
+        </AlertDescription>
+      </Alert>
 
       <Card>
         <CardHeader>
@@ -112,7 +126,11 @@ function ProjectDetailPage() {
                 <ItemTitle>WebSocket endpoint</ItemTitle>
               </ItemHeader>
               <ItemContent>
-                <ItemDescription>{`wss://${project?.domain ?? slug}`}</ItemDescription>
+                <ItemDescription>
+                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                    {`wss://${project?.domain ?? slug}`}
+                  </code>
+                </ItemDescription>
               </ItemContent>
             </Item>
             <ItemSeparator />
@@ -121,7 +139,11 @@ function ProjectDetailPage() {
                 <ItemTitle>Project domain</ItemTitle>
               </ItemHeader>
               <ItemContent>
-                <ItemDescription>{project?.domain ?? slug}</ItemDescription>
+                <ItemDescription>
+                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                    {project?.domain ?? slug}
+                  </code>
+                </ItemDescription>
               </ItemContent>
             </Item>
             <ItemSeparator />
@@ -131,7 +153,8 @@ function ProjectDetailPage() {
               </ItemHeader>
               <ItemContent>
                 <ItemDescription>
-                  Run `zocket link`, then `zocket deploy` from your app directory.
+                  Run <code className="rounded bg-muted px-1 py-0.5 text-xs">zocket link</code>, then{" "}
+                  <code className="rounded bg-muted px-1 py-0.5 text-xs">zocket deploy</code> from your app directory.
                 </ItemDescription>
               </ItemContent>
             </Item>
@@ -155,7 +178,9 @@ function ProjectDetailPage() {
           </CardHeader>
           <Separator />
           <CardContent className="pt-6">
-            <code className="block overflow-x-auto rounded-md border p-3">{tokenPreview}</code>
+            <code className="block overflow-x-auto rounded-lg border border-primary/20 bg-primary/[0.04] p-4 text-sm">
+              {tokenPreview}
+            </code>
           </CardContent>
         </Card>
       ) : null}

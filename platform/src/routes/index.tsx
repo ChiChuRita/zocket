@@ -47,7 +47,12 @@ function DashboardPage() {
   });
 
   if (!session.ready || projectsQuery.isLoading) {
-    return <div>Loading projects…</div>;
+    return (
+      <div className="flex items-center gap-3 py-16 text-muted-foreground">
+        <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+        <span className="text-sm">Loading projects...</span>
+      </div>
+    );
   }
 
   if (!session.workosUser?.email) {
@@ -65,22 +70,22 @@ function DashboardPage() {
   const runningProjects = projects.filter((entry) => entry.activeDeployment).length;
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-col gap-1">
-            <CardTitle>{data?.workspace.name ?? "Workspace"}</CardTitle>
-            <CardDescription>
-              {projects.length === 0
-                ? "Create a project, then deploy the first bundle from the Zocket CLI."
-                : `${runningProjects} of ${projects.length} projects currently have an active deployment.`}
-            </CardDescription>
-          </div>
-          <Button asChild>
-            <Link to="/projects/new">Create Project</Link>
-          </Button>
-        </CardHeader>
-      </Card>
+    <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-2">
+          <h1 className="font-heading text-3xl font-bold tracking-tight">
+            {data?.workspace.name ?? "Workspace"}
+          </h1>
+          <p className="text-muted-foreground">
+            {projects.length === 0
+              ? "Create a project, then deploy the first bundle from the Zocket CLI."
+              : `${runningProjects} of ${projects.length} project${projects.length !== 1 ? "s" : ""} with active deployments`}
+          </p>
+        </div>
+        <Button asChild>
+          <Link to="/projects/new">Create Project</Link>
+        </Button>
+      </div>
 
       <Card>
         <CardHeader>
@@ -109,15 +114,25 @@ function DashboardPage() {
                 <div key={entry.project.id}>
                   <Item variant="outline">
                     <ItemHeader>
-                      <ItemTitle>{entry.project.name}</ItemTitle>
-                      <Badge>{entry.activeDeployment?.status ?? "Not deployed"}</Badge>
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className={`h-2 w-2 rounded-full ${entry.activeDeployment ? "bg-primary" : "bg-muted-foreground/40"}`}
+                        />
+                        <ItemTitle>{entry.project.name}</ItemTitle>
+                      </div>
+                      <Badge variant={entry.activeDeployment ? "default" : "secondary"}>
+                        {entry.activeDeployment?.status ?? "Not deployed"}
+                      </Badge>
                     </ItemHeader>
                     <ItemContent>
-                      <ItemDescription>{entry.project.domain}</ItemDescription>
-                      <ItemDescription>{`wss://${entry.project.domain}`}</ItemDescription>
+                      <ItemDescription>
+                        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                          {`wss://${entry.project.domain}`}
+                        </code>
+                      </ItemDescription>
                     </ItemContent>
                     <ItemActions>
-                      <Button asChild variant="outline">
+                      <Button asChild variant="outline" size="sm">
                         <Link to="/projects/$slug" params={{ slug: entry.project.slug }}>
                           Open
                         </Link>

@@ -8,14 +8,10 @@ const highlighter = await createHighlighter({
 });
 
 function hl(code: string): string {
-  const html = highlighter.codeToHtml(code.trim(), {
+  return highlighter.codeToHtml(code.trim(), {
     lang: "typescript",
     theme: "github-dark",
   });
-  // Strip the wrapping <pre><code>...</code></pre> — we handle that ourselves
-  return html
-    .replace(/^<pre[^>]*><code[^>]*>/, "")
-    .replace(/<\/code><\/pre>$/, "");
 }
 
 const comparisons = [
@@ -329,13 +325,21 @@ await agent.start({ prompt: "Summarize this" });`),
 <section class="relative flex flex-col gap-8">
   <div class="section-glow bg-primary"></div>
 
-  <header class="reveal flex flex-col gap-3">
-    <h2 class="text-3xl font-bold tracking-tight text-white md:text-4xl">
-      See the <span class="text-primary">difference</span>
-    </h2>
-    <p class="max-w-2xl text-base text-white/50 md:text-lg">
-      Same feature, different tools. Click a tab to compare.
-    </p>
+  <header class="reveal flex flex-col gap-4">
+    <div class="flex items-center gap-3">
+      <span class="h-px w-10 bg-gradient-to-r from-primary/80 to-transparent"></span>
+      <span class="font-mono text-[11px] uppercase tracking-[0.24em] text-primary/70">
+        Benchmarked side by side
+      </span>
+    </div>
+    <div class="max-w-3xl">
+      <h2 class="text-3xl font-bold tracking-tight text-white md:text-4xl">
+        Same feature, <span class="text-primary">very different</span> runtime model.
+      </h2>
+      <p class="mt-3 max-w-2xl text-base text-white/45 md:text-lg">
+        Compare the amount of ceremony, infrastructure assumptions, and state management you carry into each use case.
+      </p>
+    </div>
   </header>
 
   <div class="reveal">
@@ -344,15 +348,19 @@ await agent.start({ prompt: "Summarize this" });`),
 </section>
 
 <style is:global>
+  .comparison-code {
+    font-family: "JetBrains Mono", monospace;
+    font-variant-ligatures: none;
+    tab-size: 2;
+  }
   .comparison-code pre {
     background: transparent !important;
     margin: 0;
     padding: 0;
+    overflow: visible !important;
   }
   .comparison-code code {
     background: transparent !important;
-  }
-  .comparison-code .line {
-    display: block;
+    font-family: inherit;
   }
 </style>

@@ -15,13 +15,21 @@ interface Comparison {
 export function ComparisonShowcase({ comparisons }: { comparisons: Comparison[] }) {
   return (
     <Tabs defaultValue={comparisons[0]?.id} className="flex flex-col gap-6">
-      <TabsList className="flex-wrap">
-        {comparisons.map((c) => (
-          <TabsTrigger key={c.id} value={c.id}>
-            vs {c.competitor}
-          </TabsTrigger>
-        ))}
-      </TabsList>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <span className="h-px w-10 bg-gradient-to-r from-[hsl(30,100%,50%)]/70 to-transparent" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-[hsl(30,100%,65%)]/75">
+            Compare the tradeoffs
+          </span>
+        </div>
+        <TabsList className="flex-wrap md:flex-nowrap">
+          {comparisons.map((c) => (
+            <TabsTrigger key={c.id} value={c.id}>
+              vs {c.competitor}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
 
       {comparisons.map((c) => (
         <TabsContent
@@ -29,16 +37,19 @@ export function ComparisonShowcase({ comparisons }: { comparisons: Comparison[] 
           value={c.id}
           className="flex flex-col gap-5 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:slide-in-from-bottom-2 data-[state=active]:duration-300"
         >
-          {/* Use case label */}
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm font-medium text-white/40">Use case:</span>
-            <span className="text-sm font-semibold text-white/90">{c.useCase}</span>
-            <span className="hidden sm:inline text-sm text-white/40">— {c.description}</span>
+          <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.025] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="rounded-full border border-white/[0.08] bg-black/30 px-3 py-1 font-mono text-[11px] uppercase tracking-[0.2em] text-white/35">
+                Use case
+              </span>
+              <span className="text-lg font-semibold text-white/95">{c.useCase}</span>
+            </div>
+            <p className="max-w-2xl text-sm leading-relaxed text-white/45 sm:text-right">
+              {c.description}
+            </p>
           </div>
 
-          {/* Code comparison */}
           <div className="grid gap-4 md:grid-cols-2">
-            {/* Competitor */}
             <div className="flex flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0d0d0d]/92 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors duration-300 hover:border-white/[0.12]">
               <div className="flex items-center border-b border-white/[0.06] px-5 py-3">
                 <div className="flex gap-2">
@@ -59,7 +70,6 @@ export function ComparisonShowcase({ comparisons }: { comparisons: Comparison[] 
               />
             </div>
 
-            {/* Zocket */}
             <div className="flex flex-col overflow-hidden rounded-2xl border border-[hsl(30,100%,50%)]/20 bg-[#0d0d0d]/92 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors duration-300 hover:border-[hsl(30,100%,50%)]/30">
               <div className="flex items-center border-b border-[hsl(30,100%,50%)]/10 px-5 py-3">
                 <div className="flex gap-2">
@@ -81,10 +91,12 @@ export function ComparisonShowcase({ comparisons }: { comparisons: Comparison[] 
             </div>
           </div>
 
-          {/* Takeaway */}
-          <p className="text-sm leading-relaxed text-white/50">
+          <div className="rounded-2xl border border-[hsl(30,100%,50%)]/10 bg-[hsl(30,100%,50%)]/5 px-4 py-3 text-sm leading-relaxed text-white/55">
+            <span className="mr-2 font-mono text-[11px] uppercase tracking-[0.2em] text-[hsl(30,100%,65%)]/70">
+              Takeaway
+            </span>
             {c.takeaway}
-          </p>
+          </div>
         </TabsContent>
       ))}
     </Tabs>

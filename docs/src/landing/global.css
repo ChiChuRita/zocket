@@ -29,6 +29,11 @@
   --color-success:        oklch(0.78 0.17 155);
   --color-info:           oklch(0.78 0.12 235);
 
+  --color-accent-cyan:    oklch(0.82 0.14 215);
+  --color-accent-violet:  oklch(0.78 0.18 300);
+  --color-accent-emerald: oklch(0.80 0.17 158);
+  --color-accent-pink:    oklch(0.78 0.18 355);
+
   --font-sans:   "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono:   "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
@@ -67,7 +72,7 @@
     letter-spacing: -0.01em;
   }
 
-  h1 { font-size: clamp(2.25rem, 4.4vw, 3.75rem); line-height: 1; font-weight: 700; letter-spacing: -0.02em; }
+  h1 { font-size: clamp(2.25rem, 4.4vw, 3.75rem); line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; }
   h2 { font-size: clamp(1.75rem, 2.8vw, 2.25rem); line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; }
   h3 { font-size: 1rem; line-height: 1.3; font-weight: 500; }
 
@@ -350,7 +355,17 @@
   50%      { transform: translate3d(5px, -9px, 0) rotate(14deg); }
 }
 
+@keyframes sock-swing-left {
+  0%, 100% { transform: translateX(-50%) rotate(-4deg); }
+  50%      { transform: translateX(-50%) rotate(-28deg); }
+}
+
+@keyframes sock-swing-right {
+  0%, 100% { transform: translateX(-50%) rotate(4deg); }
+  50%      { transform: translateX(-50%) rotate(28deg); }
+}
+
 /* Named helpers that attach keyframes to class selectors */
-.anim-nudge-right { animation: nudge-right 2s ease-in-out infinite; }
-.anim-sock-left   { animation: sock-left 4.8s ease-in-out infinite; transform-origin: 62% 28%; }
-.anim-sock-right  { animation: sock-right 4.8s ease-in-out infinite; transform-origin: 38% 28%; }
+.anim-nudge-right      { animation: nudge-right 2s ease-in-out infinite; }
+.anim-sock-swing-left  { animation: sock-swing-left 4.8s ease-in-out infinite; transform-origin: 50% 0%; }
+.anim-sock-swing-right { animation: sock-swing-right 4.8s ease-in-out infinite; transform-origin: 50% 0%; }

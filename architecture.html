@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Zocket Architecture</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: #12151c;
+    --panel-2: #171b24;
+    --border: #242a36;
+    --text: #e6e8ee;
+    --muted: #9098a8;
+    --accent: #7aa2ff;
+    --accent-2: #b388ff;
+    --accent-rgb: 122, 162, 255;
+    --ok: #6ee7b7;
+    --warn: #fbbf24;
+    --code-bg: #0f1218;
+    --accent-glow: rgba(var(--accent-rgb), 0.10);
+    --accent-glow-strong: rgba(var(--accent-rgb), 0.16);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #fafbfc;
+      --panel: #ffffff;
+      --panel-2: #f4f5f8;
+      --border: #e3e6ec;
+      --text: #1a1d24;
+      --muted: #5b6474;
+      --accent: #3b6dfb;
+      --accent-2: #7a4ef0;
+      --accent-rgb: 59, 109, 251;
+      --ok: #098551;
+      --warn: #b2660c;
+      --code-bg: #f1f2f6;
+      --accent-glow: rgba(var(--accent-rgb), 0.08);
+      --accent-glow-strong: rgba(var(--accent-rgb), 0.14);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.65;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 24px 96px; }
+
+  header.hero {
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+  }
+  header.hero .eyebrow {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  header.hero h1 {
+    font-size: 44px;
+    line-height: 1.1;
+    margin: 0 0 14px;
+    letter-spacing: -0.02em;
+  }
+  header.hero p.lede {
+    font-size: 19px;
+    color: var(--muted);
+    margin: 0 0 20px;
+    max-width: 680px;
+  }
+  header.hero .links a {
+    color: var(--accent);
+    text-decoration: none;
+    margin-right: 8px;
+    font-size: 14px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    transition: background-color 160ms ease, box-shadow 160ms ease;
+  }
+  header.hero .links a:hover {
+    background-color: var(--accent-glow);
+    box-shadow: 0 0 0 1px var(--accent-glow-strong);
+  }
+
+  nav.toc {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 48px;
+  }
+  nav.toc strong { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  nav.toc ol {
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 6px 18px;
+  }
+  nav.toc a {
+    color: var(--text);
+    text-decoration: none;
+    font-size: 14px;
+    padding: 4px 8px;
+    margin: 0 -8px;
+    border-radius: 6px;
+    display: inline-block;
+    transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  }
+  nav.toc a:hover {
+    color: var(--accent);
+    background-color: var(--accent-glow);
+    box-shadow: inset 0 0 0 1px var(--accent-glow-strong);
+  }
+
+  section { margin-bottom: 56px; }
+  section h2 {
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+    padding-top: 8px;
+  }
+  section h2::before {
+    content: "";
+    display: block;
+    width: 32px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    border-radius: 2px;
+    margin-bottom: 14px;
+  }
+  section h3 { font-size: 17px; margin: 20px 0 6px; }
+  section p { color: var(--text); }
+  section p.note { color: var(--muted); font-size: 14px; }
+
+  code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    color: var(--text);
+  }
+  a { color: var(--accent); }
+  section a, .card a {
+    text-decoration: none;
+    padding: 1px 4px;
+    margin: 0 -4px;
+    border-radius: 4px;
+    transition: background-color 160ms ease, box-shadow 160ms ease;
+  }
+  section a:hover, .card a:hover {
+    background-color: var(--accent-glow);
+    box-shadow: 0 0 0 1px var(--accent-glow-strong);
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .card h4 {
+    margin: 0 0 6px;
+    font-size: 15px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    color: var(--accent);
+  }
+  .card p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.55; }
+  .card .files { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .card .files code { font-size: 11.5px; }
+
+  .diagram {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px;
+    margin: 18px 0;
+    overflow-x: auto;
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .diagram figcaption {
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+  .legend-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    justify-content: center;
+    margin-bottom: 14px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .legend-row .lg { display: inline-flex; align-items: center; gap: 8px; }
+  .legend-row .sw { display: inline-block; width: 22px; height: 3px; border-radius: 2px; }
+  .legend-row .lg-pub .sw { background: #7aa2ff; }
+  .legend-row .lg-sub .sw { background: linear-gradient(90deg, #b388ff 50%, transparent 50%); background-size: 6px 3px; }
+  .legend-row .lg-ctrl .sw { background: #6ee7b7; }
+
+  table.stack {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 14px;
+    font-size: 14px;
+  }
+  table.stack th, table.stack td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.stack th {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  table.stack tr:last-child td { border-bottom: none; }
+
+  ol.flow { padding-left: 22px; }
+  ol.flow li { margin: 6px 0; }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+    margin-right: 8px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    transition: background-color 160ms ease, box-shadow 160ms ease;
+  }
+  footer a:hover {
+    background-color: var(--accent-glow);
+    box-shadow: 0 0 0 1px var(--accent-glow-strong);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <span class="eyebrow">System Architecture</span>
+    <h1>Zocket</h1>
+    <p class="lede">A typed actor framework for realtime applications — define stateful actors with end-to-end type safety over WebSockets, with sequential execution, state synchronization via JSON Patch, and pub/sub events.</p>
+    <div class="links">
+      <a href="README.md">README</a>
+      <a href="docs/">Docs</a>
+      <a href="examples/">Examples</a>
+      <a href="packages/">Packages</a>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <strong>Contents</strong>
+    <ol>
+      <li><a href="#overview">1. Overview</a></li>
+      <li><a href="#system">2. System diagram</a></li>
+      <li><a href="#components">3. Components</a></li>
+      <li><a href="#platform">4. Hosted platform</a></li>
+      <li><a href="#request-flow">5. Request flow</a></li>
+      <li><a href="#deploy-flow">6. Deployment flow</a></li>
+      <li><a href="#infra">7. Infrastructure</a></li>
+      <li><a href="#stack">8. Tech stack</a></li>
+    </ol>
+  </nav>
+
+  <section id="overview">
+    <h2>1. Overview</h2>
+    <p>Zocket lets developers describe a realtime application as a collection of <em>actors</em>: small, stateful server-side objects with methods, events, and typed state schemas. Clients connect over WebSockets and interact with actors through RPC-style calls while receiving live state updates as JSON Patches.</p>
+    <h3>Design goals</h3>
+    <ul>
+      <li><strong>End-to-end type safety</strong> — actor schemas authored once with Zod; client types are inferred directly from the server definition.</li>
+      <li><strong>Sequential execution per actor</strong> — no interleaving, no accidental races inside a single actor instance.</li>
+      <li><strong>State sync via JSON Patch</strong> — mutations are produced through Immer and shipped as minimal patches to subscribers.</li>
+      <li><strong>Pub/sub events</strong> — typed, broadcast-only channels for one-to-many signaling.</li>
+      <li><strong>Deploy anywhere</strong> — run self-hosted with Docker Compose, or push bundles to the hosted platform.</li>
+    </ul>
+  </section>
+
+  <section id="system">
+    <h2>2. System diagram</h2>
+    <p>The messaging fabric is NATS. Two JetStream streams carry actor traffic and one core-NATS namespace carries session lifecycle. The diagram below shows every subject, who publishes it, and who subscribes.</p>
+    <figure class="diagram">
+      <div class="legend-row">
+        <span class="lg lg-pub"><span class="sw"></span>publish (JetStream)</span>
+        <span class="lg lg-sub"><span class="sw dash"></span>subscribe / consume</span>
+        <span class="lg lg-ctrl"><span class="sw"></span>core NATS · HTTP control</span>
+      </div>
+      <svg viewBox="0 0 1040 780" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Zocket NATS system diagram">
+        <defs>
+          <marker id="arrowPub" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#7aa2ff"/>
+          </marker>
+          <marker id="arrowSub" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#b388ff"/>
+          </marker>
+          <marker id="arrowCtrl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#6ee7b7"/>
+          </marker>
+          <style>
+            .box { fill: var(--panel-2); stroke: var(--border); stroke-width: 1.5; }
+            .sub-box { fill: var(--panel); stroke: var(--border); stroke-width: 1.25; }
+            .group { fill: none; stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 4; }
+            .stream { fill: var(--panel-2); stroke: #7aa2ff; stroke-width: 1.5; }
+            .coreNats { fill: var(--panel-2); stroke: #6ee7b7; stroke-width: 1.5; stroke-dasharray: 6 3; }
+            .label { font: 600 13px -apple-system, "Segoe UI", sans-serif; fill: var(--text); }
+            .sub { font: 500 11px -apple-system, "Segoe UI", sans-serif; fill: var(--muted); }
+            .glabel { font: 700 10px -apple-system, "Segoe UI", sans-serif; fill: var(--muted); letter-spacing: 0.14em; }
+            .subj { font: 600 12px "SF Mono", Menlo, monospace; fill: #7aa2ff; }
+            .subjCore { font: 600 12px "SF Mono", Menlo, monospace; fill: #6ee7b7; }
+            .tag { font: 700 10px -apple-system, "Segoe UI", sans-serif; letter-spacing: 0.10em; }
+            .ePub { stroke: #7aa2ff; stroke-width: 1.8; fill: none; }
+            .eSub { stroke: #b388ff; stroke-width: 1.8; fill: none; stroke-dasharray: 5 3; }
+            .eCtrl { stroke: #6ee7b7; stroke-width: 1.6; fill: none; }
+            .eHttp { stroke: #6ee7b7; stroke-width: 1.6; fill: none; stroke-dasharray: 2 3; }
+          </style>
+        </defs>
+
+        <!-- ===== Client ===== -->
+        <rect class="box" x="30" y="240" width="130" height="100" rx="8"/>
+        <text class="label" x="95" y="268" text-anchor="middle">Client</text>
+        <text class="sub" x="95" y="288" text-anchor="middle">@zocket/client</text>
+        <text class="sub" x="95" y="304" text-anchor="middle">+ react</text>
+        <text class="sub" x="95" y="324" text-anchor="middle">WebSocket</text>
+
+        <!-- ===== Gateway ===== -->
+        <rect class="box" x="210" y="190" width="190" height="220" rx="8"/>
+        <text class="label" x="305" y="218" text-anchor="middle">Gateway</text>
+        <text class="sub" x="305" y="236" text-anchor="middle">@zocket/gateway · :3001</text>
+        <rect class="sub-box" x="225" y="254" width="160" height="44" rx="6"/>
+        <text class="sub" x="305" y="272" text-anchor="middle">inbound publisher</text>
+        <text class="sub" x="305" y="288" text-anchor="middle">core-NATS lifecycle pub</text>
+        <rect class="sub-box" x="225" y="308" width="160" height="44" rx="6"/>
+        <text class="sub" x="305" y="326" text-anchor="middle">outbound consumer</text>
+        <text class="sub" x="305" y="342" text-anchor="middle">(ephemeral, per session)</text>
+        <rect class="sub-box" x="225" y="362" width="160" height="36" rx="6"/>
+        <text class="sub" x="305" y="380" text-anchor="middle">HTTP → /registry/authorize</text>
+
+        <!-- ===== NATS fabric ===== -->
+        <rect class="group" x="430" y="50" width="400" height="620" rx="10"/>
+        <text class="glabel" x="445" y="68">JETSTREAM + CORE</text>
+
+        <!-- INBOUND stream -->
+        <rect class="stream" x="450" y="90" width="360" height="130" rx="8"/>
+        <rect x="450" y="90" width="66" height="20" fill="#7aa2ff"/>
+        <text class="tag" x="483" y="104" text-anchor="middle" fill="#0b0d12">STREAM</text>
+        <text class="label" x="705" y="105" text-anchor="middle">INBOUND</text>
+        <text class="sub" x="705" y="122" text-anchor="middle">workqueue · memory · 60s</text>
+        <text class="subj" x="630" y="152" text-anchor="middle">inbound.&gt;</text>
+        <line x1="470" y1="164" x2="790" y2="164" stroke="var(--border)" stroke-width="1"/>
+        <text class="subj" x="630" y="184" text-anchor="middle">inbound.{ws}.{proj}.{actorType}.{actorId}</text>
+        <text class="sub" x="630" y="202" text-anchor="middle">InboundEnvelope { sessionId, userId,</text>
+        <text class="sub" x="630" y="216" text-anchor="middle">claims, ClientMessage }</text>
+
+        <!-- OUTBOUND stream -->
+        <rect class="stream" x="450" y="260" width="360" height="130" rx="8"/>
+        <rect x="450" y="260" width="66" height="20" fill="#7aa2ff"/>
+        <text class="tag" x="483" y="274" text-anchor="middle" fill="#0b0d12">STREAM</text>
+        <text class="label" x="705" y="275" text-anchor="middle">OUTBOUND</text>
+        <text class="sub" x="705" y="292" text-anchor="middle">limits · memory · 30s</text>
+        <text class="subj" x="630" y="322" text-anchor="middle">outbound.&gt;</text>
+        <line x1="470" y1="334" x2="790" y2="334" stroke="var(--border)" stroke-width="1"/>
+        <text class="subj" x="630" y="354" text-anchor="middle">outbound.{ws}.{proj}.{sessionId}</text>
+        <text class="sub" x="630" y="372" text-anchor="middle">OutboundEnvelope { sessionId, scope,</text>
+        <text class="sub" x="630" y="386" text-anchor="middle">ServerMessage }</text>
+
+        <!-- CORE session subjects -->
+        <rect class="coreNats" x="450" y="430" width="360" height="180" rx="8"/>
+        <rect x="450" y="430" width="86" height="20" fill="#6ee7b7"/>
+        <text class="tag" x="493" y="444" text-anchor="middle" fill="#0b0d12">CORE NATS</text>
+        <text class="label" x="705" y="445" text-anchor="middle">Session lifecycle</text>
+        <text class="sub" x="705" y="462" text-anchor="middle">fire-and-forget · no ack</text>
+        <text class="subjCore" x="630" y="492" text-anchor="middle">session.connected.{ws}.{proj}</text>
+        <text class="sub" x="630" y="508" text-anchor="middle">{ sessionId, userId, connectedAt }</text>
+        <text class="subjCore" x="630" y="540" text-anchor="middle">session.disconnected.{ws}.{proj}</text>
+        <text class="sub" x="630" y="556" text-anchor="middle">{ sessionId, disconnectedAt }</text>
+        <text class="sub" x="630" y="586" text-anchor="middle">runtime uses disconnect to clean up</text>
+        <text class="sub" x="630" y="600" text-anchor="middle">per-session actor subscriptions</text>
+
+        <!-- ===== Runtime ===== -->
+        <rect class="box" x="855" y="50" width="160" height="620" rx="8"/>
+        <text class="label" x="935" y="80" text-anchor="middle">Runtime</text>
+        <text class="sub" x="935" y="96" text-anchor="middle">@zocket/runtime</text>
+        <text class="sub" x="935" y="112" text-anchor="middle">Bun · Elysia :8080</text>
+
+        <rect class="sub-box" x="870" y="130" width="130" height="90" rx="6"/>
+        <text class="label" x="935" y="154" text-anchor="middle">Consumer</text>
+        <text class="sub" x="935" y="172" text-anchor="middle">durable · per actor type</text>
+        <text class="sub" x="935" y="188" text-anchor="middle">rt-{ws}-{proj}-{type}</text>
+        <text class="sub" x="935" y="204" text-anchor="middle">explicit ack</text>
+
+        <rect class="sub-box" x="870" y="240" width="130" height="60" rx="6"/>
+        <text class="label" x="935" y="262" text-anchor="middle">Actor</text>
+        <text class="sub" x="935" y="278" text-anchor="middle">instance.invoke</text>
+        <text class="sub" x="935" y="294" text-anchor="middle">Immer state</text>
+
+        <rect class="sub-box" x="870" y="320" width="130" height="70" rx="6"/>
+        <text class="label" x="935" y="342" text-anchor="middle">VirtualConn</text>
+        <text class="sub" x="935" y="360" text-anchor="middle">per session</text>
+        <text class="sub" x="935" y="376" text-anchor="middle">publishes outbound</text>
+
+        <rect class="sub-box" x="870" y="490" width="130" height="70" rx="6"/>
+        <text class="label" x="935" y="512" text-anchor="middle">Session sub</text>
+        <text class="sub" x="935" y="530" text-anchor="middle">core NATS cb</text>
+        <text class="sub" x="935" y="546" text-anchor="middle">on disconnect</text>
+
+        <!-- ===== Data-path edges ===== -->
+
+        <!-- Client → Gateway (WS in) -->
+        <path class="ePub" d="M160 270 L210 270" marker-end="url(#arrowPub)"/>
+        <text class="sub" x="185" y="262" text-anchor="middle">WS msg</text>
+
+        <!-- Gateway → INBOUND (PUB) -->
+        <path class="ePub" d="M400 275 L450 155" marker-end="url(#arrowPub)"/>
+        <text class="tag" x="428" y="210" text-anchor="middle" fill="#7aa2ff">PUB</text>
+
+        <!-- INBOUND → Runtime Consumer (SUB) -->
+        <path class="eSub" d="M810 155 L870 165" marker-end="url(#arrowSub)"/>
+        <text class="tag" x="840" y="145" text-anchor="middle" fill="#b388ff">SUB</text>
+
+        <!-- Runtime VirtualConn → OUTBOUND (PUB) -->
+        <path class="ePub" d="M870 355 L810 325" marker-end="url(#arrowPub)"/>
+        <text class="tag" x="840" y="312" text-anchor="middle" fill="#7aa2ff">PUB</text>
+
+        <!-- OUTBOUND → Gateway (SUB) -->
+        <path class="eSub" d="M450 325 L400 330" marker-end="url(#arrowSub)"/>
+        <text class="tag" x="425" y="316" text-anchor="middle" fill="#b388ff">SUB</text>
+
+        <!-- Gateway → Client (WS out) -->
+        <path class="eSub" d="M210 330 L160 310" marker-end="url(#arrowSub)"/>
+        <text class="sub" x="185" y="345" text-anchor="middle">WS push</text>
+
+        <!-- ===== Core NATS lifecycle ===== -->
+        <!-- Gateway → CORE (PUB) -->
+        <path class="eCtrl" d="M400 395 L450 510" marker-end="url(#arrowCtrl)"/>
+        <text class="tag" x="428" y="465" text-anchor="middle" fill="#6ee7b7">PUB</text>
+
+        <!-- CORE → Runtime Session sub (SUB) -->
+        <path class="eCtrl" d="M810 540 L870 520" marker-end="url(#arrowCtrl)"/>
+        <text class="tag" x="840" y="510" text-anchor="middle" fill="#6ee7b7">SUB</text>
+
+        <!-- ===== Control plane (bottom lane) ===== -->
+        <rect class="box" x="30" y="700" width="980" height="60" rx="8"/>
+        <text class="glabel" x="50" y="720">CONTROL PLANE · platform/ · CF Workers · REST (not NATS)</text>
+        <text class="sub" x="50" y="742">POST /registry/authorize  (gateway)</text>
+        <text class="sub" x="380" y="742">POST /runtime/report  ·  GET /runtime/active  (runtime)</text>
+
+        <!-- Gateway → CP (HTTP) — exits gateway bottom-left, hooks under to avoid footnote -->
+        <path class="eHttp" d="M245 410 L245 680 Q245 700 265 700 L290 700" marker-end="url(#arrowCtrl)"/>
+        <text class="sub" x="252" y="560" text-anchor="start">HTTP</text>
+
+        <!-- Runtime → CP (HTTP) -->
+        <path class="eHttp" d="M935 670 L935 700" marker-end="url(#arrowCtrl)"/>
+        <text class="sub" x="942" y="688" text-anchor="start">HTTP</text>
+      </svg>
+      <figcaption>Every NATS subject in the system, with publisher, subscriber, consumer type, and payload. Placeholders: <code>{ws}</code> workspaceId · <code>{proj}</code> projectId · <code>{actorType}</code> actor class · <code>{actorId}</code> instance · <code>{sessionId}</code> WebSocket session.</figcaption>
+    </figure>
+
+    <h3>Subject reference</h3>
+    <table class="stack">
+      <thead>
+        <tr><th>Subject</th><th>Transport</th><th>Publisher</th><th>Subscriber</th><th>Payload</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>inbound.{ws}.{proj}.{actorType}.{actorId}</code></td>
+          <td>JetStream <code>INBOUND</code><br><span class="note">workqueue · 60s</span></td>
+          <td>Gateway on WS message</td>
+          <td>Runtime · durable consumer <code>rt-{ws}-{proj}-{actorType}</code>, explicit ack</td>
+          <td><code>InboundEnvelope</code> wrapping <code>ClientMessage</code> (RPC call, event sub/unsub, state sub/unsub)</td>
+        </tr>
+        <tr>
+          <td><code>outbound.{ws}.{proj}.{sessionId}</code></td>
+          <td>JetStream <code>OUTBOUND</code><br><span class="note">limits · 30s</span></td>
+          <td>Runtime <code>VirtualConnection.send</code></td>
+          <td>Gateway · ephemeral ordered consumer, one per WS session</td>
+          <td><code>OutboundEnvelope</code> wrapping <code>ServerMessage</code> (RPC result, event, state patch)</td>
+        </tr>
+        <tr>
+          <td><code>session.connected.{ws}.{proj}</code></td>
+          <td>Core NATS</td>
+          <td>Gateway on WS open</td>
+          <td>(optional listeners)</td>
+          <td><code>SessionConnectedNotice</code> { sessionId, userId, connectedAt }</td>
+        </tr>
+        <tr>
+          <td><code>session.disconnected.{ws}.{proj}</code></td>
+          <td>Core NATS</td>
+          <td>Gateway on WS close</td>
+          <td>Runtime <code>ConsumerManager</code> · cleans up per-session actor subs</td>
+          <td><code>SessionDisconnectedNotice</code> { sessionId, disconnectedAt }</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="note">Stream definitions: <code>packages/nats-transport/src/streams.ts</code>. Gateway bridge: <code>packages/gateway/src/nats-bridge.ts</code>. Runtime consumers: <code>packages/runtime/src/consumer.ts</code>, <code>packages/runtime/src/virtual-connection.ts</code>.</p>
+
+    <h3>RPC correlation</h3>
+    <p>Client sends <code>{ id, type: "call", actor, actorId, method, input }</code> on <code>inbound.&gt;</code>. The runtime invokes the actor method and replies with <code>{ id, type: "result", ... }</code> on <code>outbound.{...sessionId}</code>. The gateway matches by <code>sessionId</code> (captured in the inbound envelope) and forwards to the right WebSocket; the client correlates by <code>id</code>.</p>
+
+    <h3>Inside the runtime</h3>
+    <p>The runtime does not spin up a NATS subscription per actor instance. It runs <strong>one durable push consumer per actor type</strong>, interleaves messages for every <code>{actorId}</code>, and funnels each one into a per-instance FIFO queue. Client-initiated state and event subscriptions are pure in-memory <code>Set&lt;Connection&gt;</code> references on the actor — broadcasts are fanned out by the runtime, not by NATS subject matching.</p>
+
+    <figure class="diagram">
+      <svg viewBox="0 0 1040 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Runtime internals diagram">
+        <defs>
+          <marker id="rtArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#7aa2ff"/>
+          </marker>
+          <marker id="rtArrowMuted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#9098a8"/>
+          </marker>
+          <marker id="rtArrowOk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#6ee7b7"/>
+          </marker>
+          <style>
+            .rtBox { fill: var(--panel-2); stroke: var(--border); stroke-width: 1.5; }
+            .rtInner { fill: var(--panel); stroke: var(--border); stroke-width: 1.25; }
+            .rtStream { fill: var(--panel-2); stroke: #7aa2ff; stroke-width: 1.5; }
+            .rtGroup { fill: none; stroke: var(--border); stroke-width: 1; stroke-dasharray: 4 4; }
+            .rtLabel { font: 600 13px -apple-system, "Segoe UI", sans-serif; fill: var(--text); }
+            .rtSub { font: 500 11px -apple-system, "Segoe UI", sans-serif; fill: var(--muted); }
+            .rtMono { font: 600 11px "SF Mono", Menlo, monospace; fill: #7aa2ff; }
+            .rtMonoOk { font: 600 11px "SF Mono", Menlo, monospace; fill: #6ee7b7; }
+            .rtGLabel { font: 700 10px -apple-system, "Segoe UI", sans-serif; fill: var(--muted); letter-spacing: 0.14em; }
+            .rtTag { font: 700 10px -apple-system, "Segoe UI", sans-serif; letter-spacing: 0.10em; }
+            .rtEdge { stroke: #7aa2ff; stroke-width: 1.8; fill: none; }
+            .rtEdgeMuted { stroke: #9098a8; stroke-width: 1.4; fill: none; stroke-dasharray: 4 3; }
+            .rtEdgeOk { stroke: #6ee7b7; stroke-width: 1.8; fill: none; }
+            .qslot { fill: var(--panel-2); stroke: var(--border); stroke-width: 1; }
+            .qslotHot { fill: rgba(122,162,255,0.25); stroke: #7aa2ff; stroke-width: 1.2; }
+          </style>
+        </defs>
+
+        <!-- INBOUND stream (left, thin) -->
+        <rect class="rtStream" x="20" y="70" width="160" height="140" rx="8"/>
+        <rect x="20" y="70" width="60" height="20" fill="#7aa2ff"/>
+        <text class="rtTag" x="50" y="84" text-anchor="middle" fill="#0b0d12">STREAM</text>
+        <text class="rtLabel" x="100" y="110" text-anchor="middle">INBOUND</text>
+        <text class="rtMono" x="100" y="132" text-anchor="middle">inbound.{ws}.</text>
+        <text class="rtMono" x="100" y="148" text-anchor="middle">{proj}.</text>
+        <text class="rtMono" x="100" y="164" text-anchor="middle">{actorType}.</text>
+        <text class="rtMono" x="100" y="180" text-anchor="middle">{actorId}</text>
+        <text class="rtSub" x="100" y="200" text-anchor="middle">workqueue · 60s</text>
+
+        <!-- Runtime outer -->
+        <rect class="rtGroup" x="220" y="20" width="620" height="600" rx="10"/>
+        <text class="rtGLabel" x="236" y="42">RUNTIME PROCESS</text>
+
+        <!-- Durable consumer -->
+        <rect class="rtBox" x="240" y="70" width="230" height="160" rx="8"/>
+        <text class="rtLabel" x="355" y="96" text-anchor="middle">Durable push consumer</text>
+        <text class="rtSub" x="355" y="114" text-anchor="middle">one per actor type</text>
+        <rect class="rtInner" x="258" y="126" width="194" height="90" rx="6"/>
+        <text class="rtMono" x="355" y="146" text-anchor="middle">name: rt-{ws}-{proj}-{type}</text>
+        <text class="rtMono" x="355" y="164" text-anchor="middle">filter: inbound.{ws}.{proj}.</text>
+        <text class="rtMono" x="355" y="178" text-anchor="middle">{actorType}.&gt;</text>
+        <text class="rtSub" x="355" y="196" text-anchor="middle">AckPolicy.Explicit</text>
+        <text class="rtSub" x="355" y="210" text-anchor="middle">maxAckPending: 256</text>
+
+        <!-- Dispatcher -->
+        <rect class="rtBox" x="500" y="110" width="170" height="80" rx="8"/>
+        <text class="rtLabel" x="585" y="136" text-anchor="middle">Dispatcher</text>
+        <text class="rtSub" x="585" y="154" text-anchor="middle">getOrCreate(actorId)</text>
+        <text class="rtSub" x="585" y="170" text-anchor="middle">enqueue(message)</text>
+        <text class="rtSub" x="585" y="184" text-anchor="middle">consumer.ack()</text>
+
+        <!-- Actor instance 1 (detailed) -->
+        <rect class="rtBox" x="240" y="270" width="430" height="220" rx="8"/>
+        <text class="rtLabel" x="260" y="293">Actor instance</text>
+        <text class="rtSub" x="260" y="310">keyed by ({actorType}, {actorId})</text>
+
+        <!-- Queue visualization -->
+        <text class="rtGLabel" x="260" y="334">FIFO QUEUE (sequential exec)</text>
+        <g>
+          <rect class="qslotHot" x="260" y="342" width="30" height="26" rx="3"/>
+          <text class="rtMono" x="275" y="360" text-anchor="middle" fill="#7aa2ff">●</text>
+          <rect class="qslot" x="295" y="342" width="30" height="26" rx="3"/>
+          <rect class="qslot" x="330" y="342" width="30" height="26" rx="3"/>
+          <rect class="qslot" x="365" y="342" width="30" height="26" rx="3"/>
+          <rect class="qslot" x="400" y="342" width="30" height="26" rx="3"/>
+        </g>
+        <text class="rtSub" x="440" y="360">processing: bool</text>
+
+        <!-- State -->
+        <rect class="rtInner" x="260" y="384" width="180" height="60" rx="6"/>
+        <text class="rtLabel" x="350" y="404" text-anchor="middle">state</text>
+        <text class="rtSub" x="350" y="420" text-anchor="middle">Immer draft →</text>
+        <text class="rtSub" x="350" y="434" text-anchor="middle">JSON Patch</text>
+
+        <!-- Subscribers -->
+        <rect class="rtInner" x="450" y="384" width="210" height="60" rx="6"/>
+        <text class="rtLabel" x="555" y="402" text-anchor="middle">subscribers (in-memory)</text>
+        <text class="rtSub" x="555" y="420" text-anchor="middle">stateSubscribers: Set&lt;Conn&gt;</text>
+        <text class="rtSub" x="555" y="434" text-anchor="middle">eventSubscribers: Set&lt;Conn&gt;</text>
+
+        <!-- lifecycle -->
+        <text class="rtSub" x="260" y="468">created lazily on first message · onActivate()</text>
+        <text class="rtSub" x="260" y="482">kept hot until runtime shuts down · onDisconnect() per conn on leave</text>
+
+        <!-- Actor instance 2 + 3 (stubs) -->
+        <rect class="rtBox" x="240" y="510" width="200" height="80" rx="8"/>
+        <text class="rtLabel" x="340" y="534" text-anchor="middle">Actor instance · id=B</text>
+        <text class="rtSub" x="340" y="552" text-anchor="middle">queue · state · subs</text>
+        <text class="rtSub" x="340" y="568" text-anchor="middle">independent, concurrent</text>
+
+        <rect class="rtBox" x="460" y="510" width="200" height="80" rx="8"/>
+        <text class="rtLabel" x="560" y="534" text-anchor="middle">Actor instance · id=C</text>
+        <text class="rtSub" x="560" y="552" text-anchor="middle">queue · state · subs</text>
+        <text class="rtSub" x="560" y="568" text-anchor="middle">independent, concurrent</text>
+
+        <!-- VirtualConnection fan-out -->
+        <rect class="rtBox" x="700" y="270" width="120" height="220" rx="8"/>
+        <text class="rtLabel" x="760" y="294" text-anchor="middle">VirtualConn</text>
+        <text class="rtSub" x="760" y="310" text-anchor="middle">one per session</text>
+        <rect class="rtInner" x="714" y="322" width="92" height="30" rx="4"/>
+        <text class="rtMono" x="760" y="341" text-anchor="middle">sess A</text>
+        <rect class="rtInner" x="714" y="360" width="92" height="30" rx="4"/>
+        <text class="rtMono" x="760" y="379" text-anchor="middle">sess B</text>
+        <rect class="rtInner" x="714" y="398" width="92" height="30" rx="4"/>
+        <text class="rtMono" x="760" y="417" text-anchor="middle">sess C</text>
+        <text class="rtSub" x="760" y="448" text-anchor="middle">.send(msg) →</text>
+        <text class="rtSub" x="760" y="462" text-anchor="middle">publishes to</text>
+        <text class="rtSub" x="760" y="476" text-anchor="middle">outbound.*</text>
+
+        <!-- OUTBOUND stream (right) -->
+        <rect class="rtStream" x="860" y="290" width="160" height="180" rx="8"/>
+        <rect x="860" y="290" width="60" height="20" fill="#7aa2ff"/>
+        <text class="rtTag" x="890" y="304" text-anchor="middle" fill="#0b0d12">STREAM</text>
+        <text class="rtLabel" x="940" y="330" text-anchor="middle">OUTBOUND</text>
+        <text class="rtMono" x="940" y="354" text-anchor="middle">outbound.{ws}.</text>
+        <text class="rtMono" x="940" y="370" text-anchor="middle">{proj}.{sessionId}</text>
+        <text class="rtSub" x="940" y="392" text-anchor="middle">one msg per</text>
+        <text class="rtSub" x="940" y="406" text-anchor="middle">subscriber per</text>
+        <text class="rtSub" x="940" y="420" text-anchor="middle">state change</text>
+        <text class="rtSub" x="940" y="444" text-anchor="middle">gateway reads</text>
+        <text class="rtSub" x="940" y="458" text-anchor="middle">per-session</text>
+
+        <!-- Edges -->
+        <!-- INBOUND → consumer -->
+        <path class="rtEdge" d="M180 150 L240 150" marker-end="url(#rtArrow)"/>
+        <text class="rtTag" x="210" y="142" text-anchor="middle" fill="#7aa2ff">PULL</text>
+
+        <!-- consumer → dispatcher -->
+        <path class="rtEdge" d="M470 150 L500 150" marker-end="url(#rtArrow)"/>
+
+        <!-- dispatcher → actor instances -->
+        <path class="rtEdgeMuted" d="M585 190 L585 250 L400 250 L400 270" marker-end="url(#rtArrowMuted)"/>
+        <path class="rtEdgeMuted" d="M585 190 L585 495 L340 495 L340 510" marker-end="url(#rtArrowMuted)"/>
+        <path class="rtEdgeMuted" d="M585 190 L585 510" marker-end="url(#rtArrowMuted)" stroke-dasharray="0"/>
+        <text class="rtSub" x="598" y="246">route by actorId</text>
+
+        <!-- actor subs → virtualconn (fan-out) -->
+        <path class="rtEdgeOk" d="M660 410 L700 340" marker-end="url(#rtArrowOk)"/>
+        <path class="rtEdgeOk" d="M660 414 L700 378" marker-end="url(#rtArrowOk)"/>
+        <path class="rtEdgeOk" d="M660 418 L700 414" marker-end="url(#rtArrowOk)"/>
+        <text class="rtTag" x="683" y="400" text-anchor="middle" fill="#6ee7b7">FAN-OUT</text>
+
+        <!-- virtualconn → OUTBOUND -->
+        <path class="rtEdge" d="M820 380 L860 380" marker-end="url(#rtArrow)"/>
+        <text class="rtTag" x="840" y="372" text-anchor="middle" fill="#7aa2ff">PUB</text>
+
+        <!-- Footer notes inside runtime -->
+        <text class="rtGLabel" x="236" y="610">IN-MEMORY STATE · NOT REPLICATED · LOST ON RESTART (messages replay from INBOUND)</text>
+      </svg>
+      <figcaption>Inside the runtime: one durable consumer per actor type, per-instance queues, in-memory subscriber sets, fan-out to per-session outbound subjects.</figcaption>
+    </figure>
+
+    <h4>What happens when a client calls a method</h4>
+    <ol class="flow">
+      <li>Gateway publishes <code>InboundEnvelope</code> to <code>inbound.{ws}.{proj}.{actorType}.{actorId}</code>.</li>
+      <li>The runtime's durable consumer for that <code>{actorType}</code> receives it (one consumer serves <em>all</em> actorIds of that type — messages are interleaved).</li>
+      <li>The dispatcher resolves the actor instance by <code>{actorId}</code>, creating it lazily (<code>onActivate</code> on first hit), and pushes the envelope onto that instance's FIFO queue.</li>
+      <li>If the instance isn't already <code>processing</code>, it drains its queue one message at a time. There is <strong>no mutex</strong> — sequentiality is an invariant of the single-drain loop. Different actor instances run concurrently; the same instance never does.</li>
+      <li>Method body runs, producing state mutations through an Immer draft. The runtime diffs the draft into a JSON Patch.</li>
+      <li>The JetStream message is acked.</li>
+    </ol>
+
+    <h4>How subscriptions and fan-out work</h4>
+    <ul>
+      <li><strong>Subscriptions are not NATS subjects.</strong> A client <code>subscribe-state</code> or <code>subscribe-event</code> message mutates an in-memory <code>Set&lt;Connection&gt;</code> on the actor instance. No new consumer, no new subject — just a pointer added to a set.</li>
+      <li><strong>State fan-out.</strong> After each state mutation, the runtime iterates <code>stateSubscribers</code> and calls <code>conn.send(patch)</code> on each. Each <code>VirtualConnection</code> publishes one JetStream message to <code>outbound.{ws}.{proj}.{sessionId}</code>. Three subscribers means three outbound messages — fan-out is done in the runtime, not by NATS subject matching.</li>
+      <li><strong>Event fan-out.</strong> Identical mechanism, over the <code>eventSubscribers</code> set.</li>
+      <li><strong>Initial snapshot.</strong> On subscribe, the runtime immediately sends the current state to that one connection before the next mutation fires.</li>
+    </ul>
+
+    <h4>Actor and session lifecycle</h4>
+    <ul>
+      <li><strong>Actor creation:</strong> lazy on first inbound message for an <code>{actorId}</code>. <code>onActivate()</code> fires once.</li>
+      <li><strong>Actor eviction:</strong> none during normal operation. Instances stay hot until the runtime stops. State is <strong>not persisted</strong> — a restart drops all in-memory state and rebuilds it as messages arrive again (JetStream redelivers unacked work).</li>
+      <li><strong>Session disconnect:</strong> the gateway publishes <code>session.disconnected</code> on core NATS; the runtime's session subscription callback removes that <code>VirtualConnection</code> from every actor's subscriber sets and fires <code>onDisconnect(conn)</code> hooks. The actor itself is untouched.</li>
+    </ul>
+
+    <p class="note">Entry points: <code>packages/runtime/src/consumer.ts</code> (consumer setup, session cleanup) · <code>packages/server/src/runtime.ts</code> (dispatcher, actor instance, subscriber sets, fan-out) · <code>packages/runtime/src/virtual-connection.ts</code> (outbound publish).</p>
+  </section>
+
+  <section id="components">
+    <h2>3. Components</h2>
+    <p>Three runtime roles in the data path, plus the control plane off to the side.</p>
+    <div class="cards">
+      <div class="card">
+        <h4>Client</h4>
+        <p>Browser-side SDK (<code>@zocket/client</code>, <code>@zocket/react</code>). Opens one WebSocket, sends typed calls, subscribes to state and events, applies JSON Patches.</p>
+      </div>
+      <div class="card">
+        <h4>Gateway</h4>
+        <p>WebSocket edge (<code>@zocket/gateway</code>, <code>:3001</code>). Authorizes with the control plane, translates WS ↔ NATS, runs one ephemeral outbound consumer per session.</p>
+      </div>
+      <div class="card">
+        <h4>Runtime</h4>
+        <p>Actor host (<code>@zocket/runtime</code>). One durable consumer per actor type, executes methods, owns Immer state, publishes patches and events.</p>
+      </div>
+      <div class="card">
+        <h4>Control plane</h4>
+        <p>SaaS platform (<code>platform/</code>). Auth, projects, deployments, bundle storage. Talks REST, not NATS.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="platform">
+    <h2>4. Hosted platform</h2>
+    <p>The hosted platform under <code>platform/</code> is a full-stack SaaS control plane built with React 19 and TanStack Router, deployed to Cloudflare Workers and backed by Neon Postgres.</p>
+    <h3>Responsibilities</h3>
+    <ul>
+      <li>User and workspace management via <strong>WorkOS AuthKit</strong></li>
+      <li>Project CRUD and deployment-token lifecycle</li>
+      <li>Actor bundle storage in <strong>S3</strong></li>
+      <li>Runtime lifecycle orchestration (via Pulumi stacks)</li>
+      <li>API endpoints for CLI authentication (device flow), deployment uploads, and project queries</li>
+    </ul>
+    <h3>Database schema</h3>
+    <p>Drizzle ORM, Postgres on Neon. Core tables: <code>users</code>, <code>workspaces</code>, <code>workspace_memberships</code>, <code>projects</code>, <code>deployments</code> (with <code>actor_types</code>, <code>status</code>, <code>bundleKey</code>), <code>deploy_tokens</code>, <code>project_auth_configs</code> (JWT/JWKS), <code>runtime_configs</code>, <code>device_flows</code>, <code>cli_tokens</code>.</p>
+    <p class="note">Entry points: <code>platform/src/server/api/app.ts</code> · <code>platform/src/server/db/schema.ts</code></p>
+  </section>
+
+  <section id="request-flow">
+    <h2>5. Request flow</h2>
+    <figure class="diagram">
+      <svg viewBox="0 0 880 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Request flow diagram">
+        <defs>
+          <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+          </marker>
+          <style>
+            .b { fill: var(--panel-2); stroke: var(--border); stroke-width: 1.5; }
+            .t { font: 600 13px -apple-system, "Segoe UI", sans-serif; fill: var(--text); }
+            .st { font: 500 11px -apple-system, "Segoe UI", sans-serif; fill: var(--muted); }
+            .num { font: 700 12px -apple-system, "Segoe UI", sans-serif; fill: var(--accent); }
+            .fwd { stroke: var(--accent); stroke-width: 1.8; fill: none; }
+            .back { stroke: var(--accent-2); stroke-width: 1.8; fill: none; stroke-dasharray: 6 4; }
+          </style>
+        </defs>
+
+        <rect class="b" x="20" y="40" width="130" height="60" rx="6"/>
+        <text class="t" x="85" y="66" text-anchor="middle">Client</text>
+        <text class="st" x="85" y="84" text-anchor="middle">React app</text>
+
+        <rect class="b" x="200" y="40" width="130" height="60" rx="6"/>
+        <text class="t" x="265" y="66" text-anchor="middle">Gateway</text>
+        <text class="st" x="265" y="84" text-anchor="middle">WS :3001</text>
+
+        <rect class="b" x="380" y="40" width="130" height="60" rx="6"/>
+        <text class="t" x="445" y="66" text-anchor="middle">NATS</text>
+        <text class="st" x="445" y="84" text-anchor="middle">inbound stream</text>
+
+        <rect class="b" x="560" y="40" width="130" height="60" rx="6"/>
+        <text class="t" x="625" y="66" text-anchor="middle">Runtime</text>
+        <text class="st" x="625" y="84" text-anchor="middle">actor method</text>
+
+        <rect class="b" x="740" y="40" width="120" height="60" rx="6"/>
+        <text class="t" x="800" y="66" text-anchor="middle">Immer</text>
+        <text class="st" x="800" y="84" text-anchor="middle">state patch</text>
+
+        <!-- forward arrows -->
+        <g color="var(--accent)">
+          <path class="fwd" d="M150 70 L200 70" marker-end="url(#arrow2)"/>
+          <path class="fwd" d="M330 70 L380 70" marker-end="url(#arrow2)"/>
+          <path class="fwd" d="M510 70 L560 70" marker-end="url(#arrow2)"/>
+          <path class="fwd" d="M690 70 L740 70" marker-end="url(#arrow2)"/>
+        </g>
+        <text class="num" x="175" y="60" text-anchor="middle">1</text>
+        <text class="num" x="355" y="60" text-anchor="middle">2</text>
+        <text class="num" x="535" y="60" text-anchor="middle">3</text>
+        <text class="num" x="715" y="60" text-anchor="middle">4</text>
+
+        <!-- auth side-call -->
+        <rect class="b" x="200" y="160" width="130" height="50" rx="6"/>
+        <text class="t" x="265" y="182" text-anchor="middle">Control plane</text>
+        <text class="st" x="265" y="198" text-anchor="middle">/registry/authorize</text>
+        <path class="fwd" d="M265 100 L265 160" marker-end="url(#arrow2)" style="color: var(--accent)"/>
+
+        <!-- outbound stream -->
+        <rect class="b" x="380" y="230" width="130" height="60" rx="6"/>
+        <text class="t" x="445" y="256" text-anchor="middle">NATS</text>
+        <text class="st" x="445" y="274" text-anchor="middle">outbound stream</text>
+
+        <!-- back arrows -->
+        <g color="var(--accent-2)">
+          <path class="back" d="M800 100 L800 260 L510 260" marker-end="url(#arrow2)"/>
+          <path class="back" d="M380 260 L265 260 L265 100" marker-end="url(#arrow2)"/>
+          <path class="back" d="M200 80 L150 80" marker-end="url(#arrow2)"/>
+        </g>
+        <text class="num" x="800" y="220" fill="var(--accent-2)" text-anchor="middle">5</text>
+        <text class="num" x="340" y="250" fill="var(--accent-2)" text-anchor="middle">6</text>
+        <text class="num" x="175" y="95" fill="var(--accent-2)" text-anchor="middle">7</text>
+
+        <!-- legend -->
+        <rect x="20" y="300" width="18" height="3" fill="var(--accent)"/>
+        <text class="st" x="46" y="305">client → runtime (RPC call)</text>
+        <rect x="260" y="300" width="18" height="3" fill="var(--accent-2)"/>
+        <text class="st" x="286" y="305">runtime → client (state patch)</text>
+      </svg>
+      <figcaption>A method call and resulting state broadcast.</figcaption>
+    </figure>
+    <ol class="flow">
+      <li><strong>Connect:</strong> client opens a WebSocket to the gateway on <code>:3001</code> with an auth token.</li>
+      <li><strong>Authorize:</strong> gateway calls the control plane's <code>/registry/authorize</code> endpoint to validate the token and project.</li>
+      <li><strong>Publish:</strong> the gateway serializes the call and writes it to the NATS inbound stream.</li>
+      <li><strong>Execute:</strong> the runtime consumes the message, routes it to the correct actor instance, and runs the method body.</li>
+      <li><strong>Mutate:</strong> state changes run through Immer, producing a minimal JSON Patch.</li>
+      <li><strong>Broadcast:</strong> the patch is published to the outbound stream; subscribed gateways pick it up.</li>
+      <li><strong>Deliver:</strong> the gateway fan-outs the patch (plus any RPC reply) to every subscribed client.</li>
+    </ol>
+  </section>
+
+  <section id="deploy-flow">
+    <h2>6. Deployment flow</h2>
+    <figure class="diagram">
+      <svg viewBox="0 0 880 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Deployment flow diagram">
+        <defs>
+          <marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+          </marker>
+          <style>
+            .b3 { fill: var(--panel-2); stroke: var(--border); stroke-width: 1.5; }
+            .t3 { font: 600 13px -apple-system, "Segoe UI", sans-serif; fill: var(--text); }
+            .s3 { font: 500 11px -apple-system, "Segoe UI", sans-serif; fill: var(--muted); }
+            .e3 { stroke: var(--ok); stroke-width: 1.8; fill: none; }
+          </style>
+        </defs>
+
+        <rect class="b3" x="20" y="80" width="130" height="60" rx="6"/>
+        <text class="t3" x="85" y="106" text-anchor="middle">CLI</text>
+        <text class="s3" x="85" y="124" text-anchor="middle">bundle + upload</text>
+
+        <rect class="b3" x="200" y="80" width="150" height="60" rx="6"/>
+        <text class="t3" x="275" y="106" text-anchor="middle">Platform API</text>
+        <text class="s3" x="275" y="124" text-anchor="middle">CF Workers</text>
+
+        <rect class="b3" x="400" y="20" width="130" height="60" rx="6"/>
+        <text class="t3" x="465" y="46" text-anchor="middle">S3</text>
+        <text class="s3" x="465" y="64" text-anchor="middle">bundle store</text>
+
+        <rect class="b3" x="400" y="140" width="130" height="60" rx="6"/>
+        <text class="t3" x="465" y="166" text-anchor="middle">Pulumi</text>
+        <text class="s3" x="465" y="184" text-anchor="middle">project-runtime stack</text>
+
+        <rect class="b3" x="580" y="80" width="130" height="60" rx="6"/>
+        <text class="t3" x="645" y="106" text-anchor="middle">Runtime</text>
+        <text class="s3" x="645" y="124" text-anchor="middle">fetches + reports</text>
+
+        <rect class="b3" x="760" y="80" width="100" height="60" rx="6"/>
+        <text class="t3" x="810" y="106" text-anchor="middle">Neon</text>
+        <text class="s3" x="810" y="124" text-anchor="middle">deployment row</text>
+
+        <g color="var(--ok)">
+          <path class="e3" d="M150 110 L200 110" marker-end="url(#arrow3)"/>
+          <path class="e3" d="M350 100 L400 60" marker-end="url(#arrow3)"/>
+          <path class="e3" d="M350 120 L400 160" marker-end="url(#arrow3)"/>
+          <path class="e3" d="M530 60 L580 100" marker-end="url(#arrow3)"/>
+          <path class="e3" d="M530 160 L580 120" marker-end="url(#arrow3)"/>
+          <path class="e3" d="M710 110 L760 110" marker-end="url(#arrow3)"/>
+        </g>
+      </svg>
+      <figcaption>Deploying an actor bundle from the CLI to a running runtime.</figcaption>
+    </figure>
+    <ol class="flow">
+      <li>CLI builds a bundle and uploads it to the platform API.</li>
+      <li>Platform stores the artifact in S3 and writes a <code>deployments</code> row in Neon.</li>
+      <li>Pulumi's <code>project-runtime</code> stack is invoked to provision or update the runtime.</li>
+      <li>Runtime fetches the bundle from S3 and loads the actor types.</li>
+      <li>Runtime reports status (<code>ready</code> / <code>error</code>) back to the platform API, which updates the deployment row.</li>
+    </ol>
+  </section>
+
+  <section id="infra">
+    <h2>7. Infrastructure</h2>
+    <h3>Pulumi stacks</h3>
+    <div class="cards">
+      <div class="card">
+        <h4>pulumi-aws</h4>
+        <p>Hosts runtimes in AWS (EC2 / container orchestration).</p>
+      </div>
+      <div class="card">
+        <h4>pulumi-cloudflare</h4>
+        <p>DNS, edge routing, and Cloudflare Workers for the platform.</p>
+      </div>
+      <div class="card">
+        <h4>pulumi-neon</h4>
+        <p>Provisions the serverless Postgres database for the platform.</p>
+      </div>
+      <div class="card">
+        <h4>pulumi-project-runtime</h4>
+        <p>Per-project runtime stack; created on deploy to isolate tenant workloads.</p>
+      </div>
+    </div>
+    <h3>Local development</h3>
+    <p>Running <code>docker compose up</code> boots NATS (with JetStream), the gateway, and a runtime — all sharing the same NATS instance. See <code>docker-compose.yml</code>.</p>
+  </section>
+
+  <section id="stack">
+    <h2>8. Tech stack</h2>
+    <table class="stack">
+      <thead>
+        <tr><th>Layer</th><th>Technology</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Server runtime</td><td>Bun · Elysia · TypeScript</td></tr>
+        <tr><td>Messaging</td><td>NATS 2.10 · JetStream</td></tr>
+        <tr><td>State</td><td>Immer (mutations) · JSON Patch (wire)</td></tr>
+        <tr><td>Validation</td><td>Zod</td></tr>
+        <tr><td>Client</td><td>WebSocket API · auto-reconnect</td></tr>
+        <tr><td>UI</td><td>React 19 · TanStack Router · TanStack Query · Radix · shadcn</td></tr>
+        <tr><td>Database</td><td>Neon Postgres · Drizzle ORM</td></tr>
+        <tr><td>Edge / platform</td><td>Cloudflare Workers · Wrangler</td></tr>
+        <tr><td>Auth</td><td>WorkOS AuthKit · JWT / JWKS per project</td></tr>
+        <tr><td>Object storage</td><td>S3 (deployment bundles)</td></tr>
+        <tr><td>IaC</td><td>Pulumi (TypeScript)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    <div>
+      <a href="README.md">README</a>
+      <a href="docs/">Docs site</a>
+      <a href="examples/">Examples</a>
+      <a href="docker-compose.yml">docker-compose.yml</a>
+    </div>
+    <div>Zocket — typed actor framework</div>
+  </footer>
+
+</div>
+</body>
+</html>

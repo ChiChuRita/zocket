@@ -1,0 +1,123 @@
+---
+title: CLI
+description: Reference for the zocket command-line tool — auth, init, link, and deploy.
+---
+
+The `zocket` CLI signs you in to the platform, creates or links projects, and deploys actor bundles.
+
+## Install
+
+The CLI ships as `@zocket/cli`. Install it globally, or use it via your package manager's runner.
+
+```bash
+bun add -g @zocket/cli
+# or
+npm i -g @zocket/cli
+```
+
+After install the `zocket` binary is on your path.
+
+## Configuration
+
+The CLI stores state in two JSON files.
+
+| File | Path | Contents |
+| --- | --- | --- |
+| Global config | `~/.zocket/config.json` | `platformUrl`, `cliToken` (from `zocket auth`) |
+| Project link | `./.zocket.json` (cwd) | `projectId`, `projectSlug`, `projectDomain`, `deployToken`, `entry` |
+
+**Environment variables:**
+
+- `ZOCKET_PLATFORM_URL` — default control-plane URL. Falls back to `http://localhost:3000`. Every command accepts `--platform-url` to override per-invocation.
+
+## Commands
+
+### `zocket auth`
+
+Sign in through the platform device flow.
+
+```bash
+zocket auth [--platform-url <url>]
+```
+
+The CLI hits `/api/auth/device/start`, prints a verification URL and user code, opens your browser if possible, and polls until approval. On success it writes `cliToken` to `~/.zocket/config.json` so later commands can authenticate.
+
+Run `zocket auth` again any time to refresh the token.
+
+### `zocket init`
+
+Create a new project on the platform and link the current directory to it.
+
+```bash
+zocket init --name <name> [--slug <slug>] [--entry <file>] [--platform-url <url>]
+```
+
+| Flag | Required | Default | Description |
+| --- | --- | --- | --- |
+| `--name` | ✓ | — | Human-readable project name |
+| `--slug` |   | auto | Optional URL slug for the project |
+| `--entry` |   | `index.ts` | Path to the actor entry file |
+| `--platform-url` |   | `$ZOCKET_PLATFORM_URL` | Override the control plane |
+
+Requires `cliToken` (run `zocket auth` first). Writes `.zocket.json` in the current directory:
+
+```json
+{
+  "projectId": "prj_...",
+  "projectSlug": "my-app",
+  "projectDomain": "my-app.zocket.app",
+  "deployToken": "dt_...",
+  "entry": "index.ts"
+}
+```
+
+### `zocket link`
+
+Link the current directory to an **existing** project you already have access to.
+
+```bash
+zocket link --project <slug> [--entry <file>] [--platform-url <url>]
+```
+
+| Flag | Required | Default | Description |
+| --- | --- | --- | --- |
+| `--project` | ✓ | — | Existing project slug |
+| `--entry` |   | `index.ts` | Path to the actor entry file |
+| `--platform-url` |   | `$ZOCKET_PLATFORM_URL` | Override the control plane |
+
+Fetches the project, mints a fresh deploy token, and writes `.zocket.json` (same shape as `init`).
+
+### `zocket deploy`
+
+Bundle the linked project and push it to the platform.
+
+```bash
+zocket deploy [--entry <file>] [--platform-url <url>]
+```
+
+| Flag | Required | Default | Description |
+| --- | --- | --- | --- |
+| `--entry` |   | value from `.zocket.json`, else `index.ts` | Entry file to bundle |
+| `--platform-url` |   | `$ZOCKET_PLATFORM_URL` | Override the control plane |
+
+`zocket deploy` must be run from a linked directory (one containing `.zocket.json`). It bundles the entry file using Bun (`target: "bun"`, `format: "esm"`), uploads the bundle to `/api/deployments` with the project's deploy token, and prints the new version, status, domain, and WebSocket URL.
+
+Under the hood the platform stores the bundle in S3, records a row in the `deployments` table, and triggers the runtime to fetch and load it. See the [Deployment overview](/deployment/overview/) for what happens after upload.
+
+## Typical workflow
+
+```bash
+# one-time
+zocket auth
+
+# in a new project
+zocket init --name "Realtime Todos" --entry src/server.ts
+
+# iterate
+bun run build   # optional
+zocket deploy
+
+# join an existing project from another machine
+zocket link --project realtime-todos
+zocket deploy
+```

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Zocket — Scaling Deployment Overview</title>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "default", securityLevel: "loose", flowchart: { htmlLabels: true, curve: "basis" } });
+</script>
+<style>
+  :root {
+    --bg: #fafafa;
+    --panel: #ffffff;
+    --border: #e5e7eb;
+    --text: #111827;
+    --muted: #4b5563;
+    --accent: #6a1b9a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  header {
+    padding: 2.5rem 2rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  header h1 { margin: 0 0 0.3rem; font-size: 1.9rem; }
+  header p { margin: 0; color: var(--muted); }
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.75rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  section h2 {
+    margin-top: 0;
+    font-size: 1.25rem;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+  }
+  section h3 {
+    font-size: 1.05rem;
+    margin-top: 1.5rem;
+  }
+  code {
+    background: #f3f4f6;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .mermaid {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+    text-align: center;
+  }
+  ul { padding-left: 1.2rem; }
+  li { margin-bottom: 0.35rem; }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    padding: 1.5rem;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Zocket — Scaling Deployment Overview</h1>
+  <p>Gateways · NATS · Firecracker runners · JetStream reliability</p>
+</header>
+
+<main>
+  <section>
+    <h2>1. Bun Gateway Fleet (WebSocket termination)</h2>
+    <p>
+      The <code>@zocket/gateway</code> runs as a <strong>stateless Bun fleet</strong> behind a load balancer.
+      Each gateway only terminates client WebSockets — it holds no actor state, so clients can land on any node.
+      On connect it authenticates the session, attaches a
+      <code>{workspaceId, projectId, sessionId, userId, claims}</code> scope to every frame, and translates
+      between the wire protocol and NATS envelopes. Because gateways are stateless, the fleet scales
+      horizontally by CPU / connection count, and one gateway dying only drops its live sockets — the client
+      reconnects to another node and resumes.
+    </p>
+  </section>
+
+  <section>
+    <h2>2. NATS Cluster (routing + replication)</h2>
+    <p>
+      A clustered NATS deployment sits between gateways and runners. Routing is done
+      <strong>entirely by subject hierarchy</strong>, not by point-to-point addressing:
+    </p>
+    <ul>
+      <li>Inbound: <code>inbound.{workspaceId}.{projectId}.{actorType}.{actorId}</code></li>
+      <li>Outbound: <code>outbound.{workspaceId}.{projectId}.{sessionId}</code></li>
+      <li>Session lifecycle (core NATS): <code>session.connected.*</code> / <code>session.disconnected.*</code></li>
+    </ul>
+    <p>
+      NATS guarantees that whichever runtime is subscribed to that subject pattern receives the message,
+      regardless of which gateway produced it. The two core subject trees are backed by
+      <strong>JetStream streams replicated (R=3)</strong> across cluster nodes via Raft — a node loss
+      doesn't lose in-flight messages. Per-actor ordering is preserved because a single durable consumer
+      drains each <code>{workspace, project, actorType}</code> partition sequentially.
+    </p>
+  </section>
+
+  <section>
+    <h2>3. Actor Runners (Firecracker-isolated per tenant)</h2>
+    <p>
+      Actor code is untrusted tenant code, so each tenant gets <strong>dedicated
+      <code>@zocket/runtime</code> processes running inside Firecracker microVMs</strong> on a runner host.
+      The orchestrator places microVMs by tenant (<code>DEPLOYMENT_ID</code>), giving hardware-level isolation
+      between workspaces while keeping cold-start in the hundreds-of-ms range. Runners scale independently of
+      gateways — hot tenants get more VMs, idle ones get scaled to zero.
+    </p>
+    <p>
+      Today's v1 ships with dedicated runtime <em>processes</em> as the isolation boundary; Firecracker is the
+      v2 hardening layer swapping the process boundary for a VM boundary without changing the NATS-facing
+      contract.
+    </p>
+  </section>
+
+  <section>
+    <h2>4. Actor Runtime (instances + NATS subscription)</h2>
+    <p>
+      Inside each microVM, the runtime's <strong>ConsumerManager</strong> creates one
+      <strong>durable JetStream consumer per actor type</strong>:
+      <code>rt-{workspaceId}-{projectId}-{actorType}</code>. Incoming envelopes are dispatched to the matching
+      actor instance (spawned lazily, keyed by <code>actorId</code>), which runs handlers sequentially against
+      Immer-managed state. When an actor replies, it calls <code>VirtualConnection.send()</code>, which
+      publishes to the <code>outbound.*</code> stream — the actor never knows which gateway owns the socket.
+      Gateways attach <strong>ephemeral</strong> outbound consumers scoped to their live sessions; NATS fans
+      the message to exactly the right gateway.
+    </p>
+  </section>
+
+  <section>
+    <h2>5. JetStream Reliability</h2>
+    <ul>
+      <li>
+        <strong>INBOUND</strong> — workqueue retention, 60s max-age, <strong>explicit ACK</strong>.
+        A message is only removed once the actor has processed it. If the runtime crashes mid-handler,
+        JetStream redelivers to the replacement VM and the actor resumes from its last acked op.
+        No client message is silently dropped.
+      </li>
+      <li>
+        <strong>OUTBOUND</strong> — limits retention, 30s max-age, ephemeral per-session consumers.
+        When a client's WebSocket drops, the consumer goes away but outbound frames keep accumulating in
+        the stream. On reconnect, the new gateway recreates an ephemeral consumer from the last-delivered
+        sequence and drains the backlog — brief network blips don't lose server-to-client messages.
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>System topology</h2>
+    <div class="mermaid">
+flowchart TB
+    subgraph Clients["Clients"]
+        C1["WebSocket Client A"]
+        C2["WebSocket Client B"]
+        C3["WebSocket Client C"]
+    end
+
+    LB(["Load Balancer"])
+
+    subgraph Gateways["Bun Gateway Fleet (stateless)"]
+        G1["@zocket/gateway #1"]
+        G2["@zocket/gateway #2"]
+        G3["@zocket/gateway #3"]
+    end
+
+    subgraph NATS["NATS Cluster (Raft R=3)"]
+        direction TB
+        subgraph JS["JetStream"]
+            IN[("INBOUND stream<br/>workqueue • 60s • explicit ACK<br/>inbound.{ws}.{proj}.{type}.{id}")]
+            OUT[("OUTBOUND stream<br/>limits • 30s • ephemeral consumers<br/>outbound.{ws}.{proj}.{sessionId}")]
+        end
+        CORE["Core NATS<br/>session.connected.*<br/>session.disconnected.*"]
+    end
+
+    subgraph Runners["Actor Runner Hosts"]
+        subgraph TenantA["Tenant A — Firecracker microVM"]
+            RTA["@zocket/runtime<br/>ConsumerManager"]
+            AA1["Actor instance a1"]
+            AA2["Actor instance a2"]
+            RTA --> AA1
+            RTA --> AA2
+        end
+        subgraph TenantB["Tenant B — Firecracker microVM"]
+            RTB["@zocket/runtime<br/>ConsumerManager"]
+            AB1["Actor instance b1"]
+            RTB --> AB1
+        end
+    end
+
+    C1 & C2 & C3 --> LB --> G1 & G2 & G3
+
+    G1 -- "publish InboundEnvelope" --> IN
+    G2 -- "publish InboundEnvelope" --> IN
+    G3 -- "publish InboundEnvelope" --> IN
+
+    G1 -. "session.connected / disconnected" .-> CORE
+    G2 -. "session.connected / disconnected" .-> CORE
+    G3 -. "session.connected / disconnected" .-> CORE
+
+    IN -- "durable consumer<br/>rt-{ws}-{proj}-{type}" --> RTA
+    IN -- "durable consumer<br/>rt-{ws}-{proj}-{type}" --> RTB
+    CORE -. "cleanup triggers" .-> RTA
+    CORE -. "cleanup triggers" .-> RTB
+
+    AA1 -- "VirtualConnection.send()" --> OUT
+    AA2 -- "VirtualConnection.send()" --> OUT
+    AB1 -- "VirtualConnection.send()" --> OUT
+
+    OUT -- "ephemeral per-session consumer" --> G1
+    OUT -- "ephemeral per-session consumer" --> G2
+    OUT -- "ephemeral per-session consumer" --> G3
+
+    classDef client fill:#e3f2fd,stroke:#1976d2
+    classDef gw fill:#fff3e0,stroke:#ef6c00
+    classDef nats fill:#f3e5f5,stroke:#6a1b9a
+    classDef rt fill:#e8f5e9,stroke:#2e7d32
+    classDef actor fill:#fffde7,stroke:#f9a825
+
+    class C1,C2,C3 client
+    class G1,G2,G3 gw
+    class IN,OUT,CORE nats
+    class RTA,RTB rt
+    class AA1,AA2,AB1 actor
+    </div>
+  </section>
+
+  <section>
+    <h2>Reliability flows</h2>
+    <div class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant G as Gateway
+    participant IN as JetStream INBOUND
+    participant R as Runtime (Firecracker)
+    participant A as Actor instance
+    participant OUT as JetStream OUTBOUND
+
+    Note over C,OUT: Happy path
+    C->>G: WebSocket frame
+    G->>IN: publish (workqueue)
+    IN->>R: deliver to durable consumer
+    R->>A: dispatch (sequential, Immer state)
+    A->>OUT: VirtualConnection.send()
+    OUT->>G: ephemeral session consumer
+    G->>C: WebSocket frame
+    R->>IN: ACK
+
+    Note over R,IN: Actor / runtime crash
+    R--xA: VM dies mid-handler (no ACK)
+    IN->>R: redeliver to replacement VM
+    R->>A: rehydrate state, resume
+
+    Note over C,OUT: Client disconnect + reconnect
+    C--xG: socket drops
+    G-->>OUT: ephemeral consumer removed
+    A->>OUT: messages keep buffering (30s)
+    C->>G: reconnect (possibly different gateway)
+    G->>OUT: new ephemeral consumer from last seq
+    OUT->>G: drain backlog
+    G->>C: replayed frames
+    </div>
+  </section>
+</main>
+
+<footer>Zocket scaling overview · rendered with Mermaid</footer>
+</body>
+</html>

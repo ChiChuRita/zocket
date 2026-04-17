@@ -1,316 +1,418 @@
+import { actor, createApp } from "../core/src/index";
+import { serve } from "../server/src/bun";
 import { z } from "zod";
-import { zocket, createBunServer } from "@zocket/core";
 
 const PORT = Number(Bun.env.PORT ?? 3000);
-const DEFAULT_ROOMS = ["lobby", "product", "ops"] as const;
-const MAX_HISTORY = 40;
+const WORD_BANK = [
+  "rocket",
+  "volcano",
+  "banana",
+  "castle",
+  "dragon",
+  "guitar",
+  "helmet",
+  "jungle",
+  "meteor",
+  "pirate",
+  "rainbow",
+  "submarine",
+] as const;
 
-type Role = "admin" | "member";
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
 
-type ClientInfo = {
-  name: string;
-  role: Role;
-  connectedAt: number;
+const now = () => Date.now();
+
+const createId = () => crypto.randomUUID();
+
+const PointSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+});
+
+const StrokeSchema = z.object({
+  id: z.string(),
+  color: z.string(),
+  width: z.number(),
+  points: z.array(PointSchema).min(1),
+});
+
+const PlayerSchema = z.object({
+  connectionId: z.string(),
+  name: z.string(),
+  color: z.string(),
+  score: z.number(),
+  online: z.boolean(),
+  lastSeenAt: z.number(),
+});
+
+const GuessSchema = z.object({
+  id: z.string(),
+  by: z.string(),
+  text: z.string(),
+  correct: z.boolean(),
+  at: z.number(),
+});
+
+const GameStateSchema = z.object({
+  phase: z.enum(["lobby", "drawing", "revealed"]).default("lobby"),
+  round: z.number().default(0),
+  drawerConnectionId: z.string().nullable().default(null),
+  drawerName: z.string().nullable().default(null),
+  maskedWord: z.string().default(""),
+  revealedWord: z.string().nullable().default(null),
+  winnerConnectionId: z.string().nullable().default(null),
+  players: z.array(PlayerSchema).default([]),
+  strokes: z.array(StrokeSchema).default([]),
+  guesses: z.array(GuessSchema).default([]),
+  updatedAt: z.number().default(0),
+});
+
+type GameState = z.infer<typeof GameStateSchema>;
+export type ExampleGameState = GameState;
+export type ExampleStroke = z.infer<typeof StrokeSchema>;
+export type ExamplePlayer = z.infer<typeof PlayerSchema>;
+export type ExampleGuess = z.infer<typeof GuessSchema>;
+
+const hiddenRound = {
+  word: null as string | null,
+  drawerConnectionId: null as string | null,
+  lastWord: null as string | null,
 };
 
-type ChatMessage = {
-  id: string;
-  roomId: string;
-  user: string;
-  role: Role;
-  text: string;
-  at: string;
-  traceId: string;
-};
+function normalize(text: string) {
+  return text.trim().toLowerCase();
+}
 
-type RoomSnapshot = {
-  roomId: string;
-  members: number;
-  online: string[];
-};
+function maskWord(word: string) {
+  return word
+    .split("")
+    .map((char) => (/[a-z]/i.test(char) ? "_" : char))
+    .join(" ");
+}
 
-const defaultRoomSet = new Set<string>(DEFAULT_ROOMS);
+function pickWord() {
+  const candidates = WORD_BANK.filter((word) => word !== hiddenRound.lastWord);
+  const pool = candidates.length > 0 ? candidates : WORD_BANK;
+  const word = pool[Math.floor(Math.random() * pool.length)];
+  hiddenRound.lastWord = word;
+  return word;
+}
 
-const state = {
-  clients: new Map<string, ClientInfo>(),
-  rooms: new Map<string, Set<string>>(
-    DEFAULT_ROOMS.map((roomId) => [roomId, new Set<string>()])
-  ),
-  messages: new Map<string, ChatMessage[]>(),
-};
+function getPlayer(state: GameState, connectionId: string) {
+  return state.players.find((player) => player.connectionId === connectionId);
+}
 
-const ensureRoom = (roomId: string) => {
-  if (!state.rooms.has(roomId)) {
-    state.rooms.set(roomId, new Set());
+function ensurePlayer(
+  state: GameState,
+  connectionId: string,
+  next?: Partial<Pick<ExamplePlayer, "name" | "color" | "online">>,
+) {
+  const existing = getPlayer(state, connectionId);
+  if (existing) {
+    if (next?.name) existing.name = next.name;
+    if (next?.color) existing.color = next.color;
+    if (typeof next?.online === "boolean") existing.online = next.online;
+    existing.lastSeenAt = now();
+    return existing;
   }
-};
 
-const rememberMessage = (message: ChatMessage) => {
-  const history = state.messages.get(message.roomId) ?? [];
-  history.push(message);
-  if (history.length > MAX_HISTORY) {
-    history.splice(0, history.length - MAX_HISTORY);
+  const player = {
+    connectionId,
+    name: next?.name ?? `Player ${connectionId.slice(-4)}`,
+    color: next?.color ?? "#F97316",
+    score: 0,
+    online: next?.online ?? true,
+    lastSeenAt: now(),
+  };
+  state.players.push(player);
+  return player;
+}
+
+function onlinePlayers(state: GameState) {
+  return state.players.filter((player) => player.online);
+}
+
+function nameFor(state: GameState, connectionId: string) {
+  return getPlayer(state, connectionId)?.name ?? `Player ${connectionId.slice(-4)}`;
+}
+
+function chooseNextDrawer(state: GameState) {
+  const candidates = onlinePlayers(state);
+  if (candidates.length < 2) return null;
+
+  if (!state.drawerConnectionId) {
+    return candidates[0];
   }
-  state.messages.set(message.roomId, history);
-};
 
-const buildRoomSnapshot = (): RoomSnapshot[] => {
-  return [...state.rooms.entries()].map(([roomId, members]) => {
-    const online = [...members]
-      .map((clientId) => state.clients.get(clientId)?.name)
-      .filter((name): name is string => Boolean(name));
-    return {
-      roomId,
-      members: members.size,
-      online,
-    };
+  const currentIndex = candidates.findIndex(
+    (player) => player.connectionId === state.drawerConnectionId,
+  );
+  if (currentIndex === -1) return candidates[0];
+  return candidates[(currentIndex + 1) % candidates.length];
+}
+
+function revealRound(
+  state: GameState,
+  emit: (event: "roundEnded", payload: { winnerName: string | null; word: string; reason: "guessed" | "drawer-left" | "restarted"; }) => void,
+  reason: "guessed" | "drawer-left" | "restarted",
+  winnerName: string | null,
+) {
+  if (!hiddenRound.word) return;
+
+  state.phase = "revealed";
+  state.revealedWord = hiddenRound.word;
+  state.maskedWord = maskWord(hiddenRound.word);
+  state.updatedAt = now();
+  emit("roundEnded", {
+    winnerName,
+    word: hiddenRound.word,
+    reason,
   });
-};
+  hiddenRound.word = null;
+  hiddenRound.drawerConnectionId = null;
+}
 
-const zo = zocket.create({
-  headers: z.object({
-    user: z.string().min(1).default("guest"),
-    role: z.enum(["admin", "member"]).default("member"),
-  }),
-  onConnect: (headers, clientId) => {
-    const info: ClientInfo = {
-      name: headers.user.trim().slice(0, 24),
-      role: headers.role,
-      connectedAt: Date.now(),
-    };
-    state.clients.set(clientId, info);
-    return info;
+export const game = actor({
+  state: GameStateSchema,
+  onConnect: ({ state, connectionId, emit }) => {
+    const player = ensurePlayer(state, connectionId, { online: true });
+    state.updatedAt = now();
+    emit("presenceChanged", {
+      name: player.name,
+      online: true,
+    });
   },
-  onDisconnect: (ctx, clientId) => {
-    state.clients.delete(clientId);
+  onDisconnect: ({ state, connectionId, emit }) => {
+    const player = getPlayer(state, connectionId);
+    if (!player) return;
 
-    for (const roomId of ctx.rooms) {
-      const room = state.rooms.get(roomId);
-      if (room) {
-        room.delete(clientId);
-        if (room.size === 0 && !defaultRoomSet.has(roomId)) {
-          state.rooms.delete(roomId);
-          state.messages.delete(roomId);
-        }
-      }
+    player.online = false;
+    player.lastSeenAt = now();
+    state.updatedAt = now();
+    emit("presenceChanged", {
+      name: player.name,
+      online: false,
+    });
+
+    if (hiddenRound.drawerConnectionId === connectionId && hiddenRound.word) {
+      revealRound(state, emit, "drawer-left", null);
     }
   },
-});
-
-const withTrace = zo.message
-  .use(() => ({
-    traceId: crypto.randomUUID(),
-    receivedAt: Date.now(),
-  }))
-  .use(({ ctx }) => ({
-    userLabel: ctx.name,
-  }));
-
-const adminGate = zo.message.use(({ ctx }) => ({
-  isAdmin: ctx.role === "admin",
-}));
-
-const appRouter = zo
-  .router()
-  .outgoing({
-    system: {
-      toast: z.object({
-        id: z.string(),
-        title: z.string(),
-        description: z.string(),
-        tone: z.enum(["info", "success", "warning", "danger"]),
+  methods: {
+    identify: {
+      input: z.object({
+        name: z.string().trim().min(1).max(24),
+        color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/),
       }),
-    },
-    presence: {
-      joined: z.object({
-        roomId: z.string(),
-        user: z.string(),
-        role: z.enum(["admin", "member"]),
-        at: z.string(),
-      }),
-      left: z.object({
-        roomId: z.string(),
-        user: z.string(),
-        role: z.enum(["admin", "member"]),
-        at: z.string(),
-      }),
-    },
-    chat: {
-      message: z.object({
-        id: z.string(),
-        roomId: z.string(),
-        user: z.string(),
-        role: z.enum(["admin", "member"]),
-        text: z.string(),
-        at: z.string(),
-        traceId: z.string(),
-      }),
-    },
-    stats: {
-      tick: z.object({
-        at: z.string(),
-        online: z.number(),
-        rooms: z.array(
-          z.object({
-            roomId: z.string(),
-            members: z.number(),
-          })
-        ),
-      }),
-    },
-  })
-  .incoming(({ send }) => ({
-    rooms: {
-      join: withTrace
-        .input(z.object({ roomId: z.string().min(1) }))
-        .handle(({ ctx, input }) => {
-          ensureRoom(input.roomId);
-          ctx.rooms.join(input.roomId);
-          state.rooms.get(input.roomId)!.add(ctx.clientId);
+      handler: ({ state, input, connectionId, emit }) => {
+        const player = ensurePlayer(state, connectionId, {
+          name: input.name,
+          color: input.color,
+          online: true,
+        });
+        state.updatedAt = now();
+        emit("presenceChanged", {
+          name: player.name,
+          online: true,
+        });
 
-          send.presence
-            .joined({
-              roomId: input.roomId,
-              user: ctx.name,
-              role: ctx.role,
-              at: new Date().toISOString(),
-            })
-            .toRoom([input.roomId]);
-
-          send.system
-            .toast({
-              id: crypto.randomUUID(),
-              title: `Joined #${input.roomId}`,
-              description: `Trace ${ctx.traceId} • ${ctx.userLabel}`,
-              tone: "success",
-            })
-            .to([ctx.clientId]);
-        }),
-      leave: withTrace
-        .input(z.object({ roomId: z.string().min(1) }))
-        .handle(({ ctx, input }) => {
-          const room = state.rooms.get(input.roomId);
-          if (room) {
-            room.delete(ctx.clientId);
-            if (room.size === 0 && !defaultRoomSet.has(input.roomId)) {
-              state.rooms.delete(input.roomId);
-              state.messages.delete(input.roomId);
-            }
-          }
-
-          send.presence
-            .left({
-              roomId: input.roomId,
-              user: ctx.name,
-              role: ctx.role,
-              at: new Date().toISOString(),
-            })
-            .toRoom([input.roomId]);
-
-          ctx.rooms.leave(input.roomId);
-        }),
-    },
-    chat: {
-      send: withTrace
-        .input(
-          z.object({
-            roomId: z.string().min(1),
-            text: z.string().min(1).max(200),
-          })
-        )
-        .handle(({ ctx, input }) => {
-          if (!ctx.rooms.has(input.roomId)) {
-            send.system
-              .toast({
-                id: crypto.randomUUID(),
-                title: "Room access denied",
-                description: `Join #${input.roomId} before posting.`,
-                tone: "warning",
-              })
-              .to([ctx.clientId]);
-            return { ok: false as const };
-          }
-
-          const message: ChatMessage = {
-            id: crypto.randomUUID(),
-            roomId: input.roomId,
-            user: ctx.name,
-            role: ctx.role,
-            text: input.text,
-            at: new Date().toISOString(),
-            traceId: ctx.traceId,
-          };
-
-          rememberMessage(message);
-
-          send.chat.message(message).toRoom([input.roomId]);
-
-          return { ok: true as const, id: message.id };
-        }),
-      history: zo.message
-        .input(
-          z.object({
-            roomId: z.string().min(1),
-            limit: z.number().min(1).max(50).default(30),
-          })
-        )
-        .handle(({ input }) => {
-          const history = state.messages.get(input.roomId) ?? [];
-          return history.slice(-input.limit);
-        }),
-    },
-    stats: {
-      get: zo.message.input(z.object({})).handle(() => {
         return {
-          now: new Date().toISOString(),
-          online: state.clients.size,
-          rooms: buildRoomSnapshot(),
+          player,
+          onlineCount: onlinePlayers(state).length,
         };
+      },
+    },
+    startRound: {
+      handler: ({ state, emit, connectionId }) => {
+        const nextDrawer = chooseNextDrawer(state);
+        if (!nextDrawer) {
+          return {
+            ok: false as const,
+            reason: "need-two-players" as const,
+          };
+        }
+
+        if (hiddenRound.word) {
+          revealRound(state, emit, "restarted", null);
+        }
+
+        const word = pickWord();
+        hiddenRound.word = word;
+        hiddenRound.drawerConnectionId = nextDrawer.connectionId;
+
+        state.phase = "drawing";
+        state.round += 1;
+        state.drawerConnectionId = nextDrawer.connectionId;
+        state.drawerName = nextDrawer.name;
+        state.maskedWord = maskWord(word);
+        state.revealedWord = null;
+        state.winnerConnectionId = null;
+        state.strokes = [];
+        state.guesses = [];
+        state.updatedAt = now();
+
+        emit("roundStarted", {
+          round: state.round,
+          drawerName: nextDrawer.name,
+          wordLength: word.length,
+        });
+
+        return {
+          ok: true as const,
+          drawerName: nextDrawer.name,
+          isDrawer: nextDrawer.connectionId === connectionId,
+        };
+      },
+    },
+    peekWord: {
+      handler: ({ state, connectionId }) => {
+        if (
+          state.phase !== "drawing" ||
+          connectionId !== state.drawerConnectionId ||
+          hiddenRound.drawerConnectionId !== connectionId
+        ) {
+          return {
+            ok: false as const,
+            word: null,
+          };
+        }
+
+        return {
+          ok: true as const,
+          word: hiddenRound.word,
+        };
+      },
+    },
+    addStroke: {
+      input: z.object({
+        color: z.string(),
+        width: z.number().min(1).max(32),
+        points: z.array(PointSchema).min(1).max(300),
       }),
+      handler: ({ state, input, connectionId, emit }) => {
+        if (
+          state.phase !== "drawing" ||
+          connectionId !== state.drawerConnectionId ||
+          hiddenRound.drawerConnectionId !== connectionId
+        ) {
+          return { ok: false as const };
+        }
+
+        state.strokes.push({
+          id: createId(),
+          color: input.color,
+          width: input.width,
+          points: input.points.map((point: { x: number; y: number }) => ({
+            x: clamp(point.x, 0, 1),
+            y: clamp(point.y, 0, 1),
+          })),
+        });
+        state.updatedAt = now();
+
+        emit("strokeCommitted", {
+          by: nameFor(state, connectionId),
+          count: state.strokes.length,
+        });
+
+        return { ok: true as const };
+      },
     },
-    admin: {
-      announce: adminGate
-        .input(z.object({ message: z.string().min(1).max(200) }))
-        .handle(({ ctx, input }) => {
-          if (!ctx.isAdmin) {
-            return { ok: false as const, reason: "forbidden" };
-          }
+    clearBoard: {
+      handler: ({ state, connectionId }) => {
+        if (
+          state.phase !== "drawing" ||
+          connectionId !== state.drawerConnectionId ||
+          hiddenRound.drawerConnectionId !== connectionId
+        ) {
+          return { ok: false as const };
+        }
 
-          send.system
-            .toast({
-              id: crypto.randomUUID(),
-              title: "Admin broadcast",
-              description: input.message,
-              tone: "info",
-            })
-            .broadcast();
-
-          return { ok: true as const };
-        }),
+        state.strokes = [];
+        state.updatedAt = now();
+        return { ok: true as const };
+      },
     },
-  }));
+    submitGuess: {
+      input: z.object({
+        text: z.string().trim().min(1).max(80),
+      }),
+      handler: ({ state, input, connectionId, emit }) => {
+        if (state.phase !== "drawing" || !hiddenRound.word) {
+          return { ok: false as const, correct: false as const };
+        }
 
-export type AppRouter = typeof appRouter;
+        if (connectionId === state.drawerConnectionId) {
+          return { ok: false as const, correct: false as const };
+        }
 
-const handlers = createBunServer(appRouter, zo);
+        const player = ensurePlayer(state, connectionId, { online: true });
+        const correct = normalize(input.text) === normalize(hiddenRound.word);
 
-Bun.serve({
-  port: PORT,
-  fetch: handlers.fetch,
-  websocket: handlers.websocket,
+        state.guesses.unshift({
+          id: createId(),
+          by: player.name,
+          text: input.text,
+          correct,
+          at: now(),
+        });
+        state.guesses = state.guesses.slice(0, 18);
+        state.updatedAt = now();
+
+        emit("guessSubmitted", {
+          by: player.name,
+          text: input.text,
+          correct,
+        });
+
+        if (correct) {
+          player.score += 1;
+          state.winnerConnectionId = connectionId;
+          revealRound(state, emit, "guessed", player.name);
+        }
+
+        return {
+          ok: true as const,
+          correct,
+        };
+      },
+    },
+  },
+  events: {
+    presenceChanged: z.object({
+      name: z.string(),
+      online: z.boolean(),
+    }),
+    roundStarted: z.object({
+      round: z.number(),
+      drawerName: z.string(),
+      wordLength: z.number(),
+    }),
+    roundEnded: z.object({
+      winnerName: z.string().nullable(),
+      word: z.string(),
+      reason: z.enum(["guessed", "drawer-left", "restarted"]),
+    }),
+    guessSubmitted: z.object({
+      by: z.string(),
+      text: z.string(),
+      correct: z.boolean(),
+    }),
+    strokeCommitted: z.object({
+      by: z.string(),
+      count: z.number(),
+    }),
+  },
 });
 
-setInterval(() => {
-  handlers.send.stats
-    .tick({
-      at: new Date().toISOString(),
-      online: state.clients.size,
-      rooms: buildRoomSnapshot().map((room) => ({
-        roomId: room.roomId,
-        members: room.members,
-      })),
-    })
-    .broadcast();
-}, 5000);
+export const app = createApp({
+  actors: {
+    game,
+  },
+});
 
-console.log(`Example server running on ws://localhost:${PORT}`);
+export type ExampleApp = typeof app;
+
+const server = serve(app, { port: PORT });
+
+console.log(`zocket example server listening on ws://127.0.0.1:${server.port}`);

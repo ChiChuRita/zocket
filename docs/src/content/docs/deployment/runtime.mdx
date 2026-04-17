@@ -1,0 +1,78 @@
+---
+title: Runtime
+description: Hosts actor instances, executes methods, and publishes state patches.
+---
+
+`@zocket/runtime` is where your actor code actually runs. It fetches a deployment bundle from the control plane, registers a durable JetStream consumer per actor type, executes methods in per-instance FIFO queues, and fans outbound messages back to subscribed sessions.
+
+## What it does on boot
+
+1. Reads env vars (see below) — fails fast if `DEPLOYMENT_ID` is missing.
+2. Calls `GET /api/internal/runtime/active?workspaceId=&projectId=&deploymentId=` to fetch the bundle URL from the control plane.
+3. Downloads the bundle to `{BUNDLE_DIR}/bundle-{timestamp}.mjs` and dynamically imports it. The bundle must export an `AppDef` as `registry`, `app`, or the default export.
+4. For each actor type in the app, creates a durable push consumer on the `INBOUND` stream:
+   - **name** — `rt-{workspaceId}-{projectId}-{actorType}`
+   - **filter** — `inbound.{workspaceId}.{projectId}.{actorType}.>`
+   - **ack policy** — explicit, `maxAckPending: 256`
+5. Subscribes to `session.disconnected.{ws}.{proj}` on core NATS to clean up per-session actor subscriptions.
+6. Starts an Elysia HTTP server on `API_PORT` (default `8080`) serving `GET /health`.
+7. Reports `status: "ready"` (with the list of actor types) to `POST /api/internal/runtime/report` on the control plane.
+
+On boot errors the runtime still reports back, with `status: "failed"` and a message, so the platform can surface the error in the deployments dashboard.
+
+## Environment variables
+
+| Variable | Required | Default | Description |
+| --- | :---: | --- | --- |
+| `DEPLOYMENT_ID` | ✓ | — | Which deployment to load. Runtime exits if unset. |
+| `NATS_URL` |   | `nats://localhost:4222` | NATS cluster URL |
+| `CONTROL_PLANE_URL` |   | `http://localhost:3000` | Control-plane base URL |
+| `CONTROL_PLANE_INTERNAL_TOKEN` |   | `zocket-internal-dev-token` | Bearer for `/api/internal/*` |
+| `WORKSPACE_ID` |   | `local-workspace` | Scopes NATS subjects and control-plane calls |
+| `PROJECT_ID` |   | `local-project` | Scopes NATS subjects and control-plane calls |
+| `API_PORT` |   | `8080` | Health / report HTTP port |
+| `BUNDLE_DIR` |   | `/app/bundles` | Where bundles are downloaded to |
+
+## How actor dispatch works
+
+One consumer per actor type receives messages for **all** actor IDs of that type, interleaved. A dispatcher routes each message to the right in-memory actor instance by `{actorId}`, creating it lazily on first hit (`onActivate` fires once). Each instance has a FIFO queue and a `processing` flag; the runtime drains the queue one message at a time, so **the same actor instance never runs concurrently** — different instances do.
+
+State is held in memory per instance via Immer drafts, diffed into JSON Patches on mutation, and **not persisted**. A restart loses in-memory state and rebuilds it as messages arrive again (JetStream redelivers unacked work).
+
+State and event subscriptions are pure in-memory `Set<Connection>` references on the actor instance — they are not NATS subjects. When an actor mutates state, the runtime iterates the `stateSubscribers` set and publishes one outbound message per subscriber to `outbound.{ws}.{proj}.{sessionId}`.
+
+See the [architecture page](/architecture.html) for a deep dive.
+
+## Health and reporting
+
+The runtime exposes a single HTTP endpoint for orchestrators:
+
+```http
+GET /health
+→ 200 { "ok": true, "deploymentId": "...", "actorTypes": [...], "deployCount": 1, "workspaceId": "...", "projectId": "..." }
+```
+
+It reports deployment state back to the control plane at boot:
+
+```http
+POST /api/internal/runtime/report
+Authorization: Bearer $CONTROL_PLANE_INTERNAL_TOKEN
+Content-Type: application/json
+
+{ "deploymentId": "...", "status": "ready", "actorTypes": ["chat","counter"] }
+```
+
+(or `status: "failed"` with a `message` on error).
+
+## Running it
+
+```bash
+DEPLOYMENT_ID=dpl_... \
+WORKSPACE_ID=ws_... \
+PROJECT_ID=prj_... \
+NATS_URL=nats://localhost:4222 \
+CONTROL_PLANE_URL=http://localhost:3000 \
+  bun ./packages/runtime/src/index.ts
+```
+
+In Docker the image is built from `packages/runtime/Dockerfile`. Scale vertically before horizontally — multiple runtime replicas on the same durable consumer will compete for messages, which is fine for stateless actors but surprising for actors with in-memory caches. Until you have explicit instance-migration semantics, run one runtime per project per deployment.

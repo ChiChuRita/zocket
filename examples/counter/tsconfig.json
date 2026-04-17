@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["bun"],
+    "baseUrl": ".",
+    "paths": {
+      "@zocket/core": ["../../packages/core/src/index.ts"],
+      "@zocket/core/*": ["../../packages/core/src/*"],
+      "@zocket/server": ["../../packages/server/src/index.ts"],
+      "@zocket/server/*": ["../../packages/server/src/*"]
+    }
+  },
+  "include": ["actors.ts", "server.ts"]
+}

@@ -18,7 +18,9 @@
     "types": ["bun", "node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@zocket/core": ["../core/src/index.ts"],
+      "@zocket/core/*": ["../core/src/*"]
     }
   },
   "include": ["src", "server.ts", "vite.config.ts"]

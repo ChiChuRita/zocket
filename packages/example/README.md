@@ -1,30 +1,41 @@
-# Zocket Example App
+# Zocket Drawing Guess Example
 
-A full-stack demo showcasing Zocket features: header validation, middleware, rooms, server push, and RPC with TanStack Query.
+This example is a small multiplayer drawing-and-guessing game built on the current actor API.
+
+It demonstrates:
+
+- one shared actor instance for the whole room
+- state snapshots plus incremental patches for strokes, guesses, scores, and presence
+- transient events alongside state sync for the activity feed
+- typed actor methods from React
+- a visual canvas so cross-tab state updates are obvious
 
 ## Run it
 
 From the repo root:
 
 ```bash
-# install deps if you haven't already
 bun install
 
-# terminal 1 - bun websocket server
+# terminal 1
 bun run --cwd packages/example dev:server
 
-# terminal 2 - vite + react client
-bun run --cwd packages/example dev:web
+# terminal 2
+bun run --cwd packages/example dev:web -- --host localhost
 ```
 
-Open `http://localhost:5173` in your browser.
+Open [http://localhost:5173](http://localhost:5173).
 
-## What it demonstrates
+## How to test it
 
-- Header schema + `onConnect`/`onDisconnect` context
-- Middleware chains (`withTrace`, `adminGate`)
-- Rooms (`join`, `leave`, `toRoom`)
-- `send.to`, `send.toRoom`, and `send.broadcast`
-- Server push via `handlers.send` interval
-- RPC calls with TanStack Query
-- Zocket React hooks (`useClient`, `useConnectionState`, `useEvent`)
+1. Open the app in two tabs.
+2. Give each tab a different player name.
+3. Start a round.
+4. Draw in the drawer tab and guess in the other tab.
+
+You should see:
+
+- strokes appear in both tabs from shared actor state
+- guesses update in both tabs
+- score changes after a correct guess
+- the raw synced snapshot in the Snapshot tab

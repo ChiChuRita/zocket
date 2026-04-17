@@ -1,0 +1,62 @@
+---
+title: NATS / JetStream
+description: Stream and consumer configuration for @zocket/nats-transport.
+---
+
+Zocket uses NATS JetStream as its messaging fabric. Two streams carry actor traffic; two core-NATS subjects carry session lifecycle.
+
+## Requirements
+
+- NATS Server 2.10+ with JetStream enabled.
+- The `nats` container in `docker-compose.yml` uses `nats:2.10-alpine` with `--jetstream --store_dir /data`, which is the minimum for local dev.
+
+Production deployments should run a clustered NATS setup with file storage for durability; Zocket's streams currently default to memory storage and short max-age, which works because the system is designed for at-least-once delivery with short retention rather than long-lived queues.
+
+## Streams
+
+`@zocket/nats-transport` ships an `ensureStreams(jsm)` helper that creates both streams if they don't exist. It's idempotent — safe to call from every gateway and every runtime at boot.
+
+| Stream | Subjects | Retention | Storage | Max age |
+| --- | --- | --- | --- | --- |
+| `INBOUND` | `inbound.>` | Workqueue | Memory | 60s |
+| `OUTBOUND` | `outbound.>` | Limits | Memory | 30s |
+
+**Why workqueue for INBOUND?** Every inbound message is consumed exactly once by the runtime that owns the actor type. Workqueue retention drops the message after ack, preventing redelivery to other consumers.
+
+**Why limits for OUTBOUND?** Outbound messages are per-session — if the session's gateway consumer is slow or disconnected, we want the stream to age out old messages rather than back up indefinitely. 30 seconds is a generous upper bound for "client is briefly behind"; anything older is stale state the client should re-fetch by re-subscribing.
+
+## Subject patterns
+
+| Subject | Who publishes | Who consumes |
+| --- | --- | --- |
+| `inbound.{ws}.{proj}.{actorType}.{actorId}` | Gateway (on client message) | Runtime (durable consumer per actor type) |
+| `outbound.{ws}.{proj}.{sessionId}` | Runtime `VirtualConnection` | Gateway (ephemeral ordered consumer per session) |
+| `session.connected.{ws}.{proj}` (core NATS) | Gateway on WS open | — |
+| `session.disconnected.{ws}.{proj}` (core NATS) | Gateway on WS close | Runtime (per-session cleanup) |
+
+Placeholders: `{ws}` workspaceId · `{proj}` projectId · `{actorType}` actor class name · `{actorId}` actor instance id · `{sessionId}` WebSocket session id.
+
+## Consumers
+
+Runtime consumers are created via `ensureConsumer(jsm, stream, config)`:
+
+| Field | Value |
+| --- | --- |
+| `durable_name` | `rt-{workspaceId}-{projectId}-{actorType}` |
+| `filter_subject` | `inbound.{ws}.{proj}.{actorType}.>` |
+| `ack_policy` | `Explicit` |
+| `max_ack_pending` | `256` |
+
+Gateway consumers are ephemeral (no `durable_name`) and ordered, filtered to exactly `outbound.{ws}.{proj}.{sessionId}`. They disappear when the WebSocket closes.
+
+## Sizing and tuning
+
+- **`max_ack_pending`** caps how many messages an actor type can be processing concurrently across all instances. Raise it for high-throughput actor types; lower it to apply backpressure earlier.
+- **Memory storage** means every NATS restart loses un-acked inbound work. For stricter guarantees switch `storage` to `File` in the stream config; you'll trade latency for durability.
+- **Max age** is a tradeoff. Raising `OUTBOUND` beyond 30s lets clients tolerate longer disconnects but buffers more state patches. If clients can re-subscribe cheaply, keep it short.
+
+## Operational tips
+
+- Every gateway and every runtime calls `ensureStreams()` at boot, so you don't have to pre-provision streams manually.
+- Use `nats stream ls` and `nats consumer ls INBOUND` against the cluster to inspect what Zocket has set up.
+- Session lifecycle runs on core NATS, not JetStream — don't look for `session.*` messages in stream state.

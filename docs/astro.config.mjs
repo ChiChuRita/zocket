@@ -3,13 +3,9 @@ import starlight from "@astrojs/starlight";
 import starlightThemeNext from "starlight-theme-next";
 import starlightLlmsTxt from "starlight-llms-txt";
 import react from "@astrojs/react";
-import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   site: "https://zocket.io",
-  vite: {
-    plugins: [tailwindcss()],
-  },
   integrations: [
     starlight({
       plugins: [
@@ -128,6 +124,19 @@ export default defineConfig({
             { label: "State Management", slug: "guides/state-management" },
             { label: "Multiplayer Draw", slug: "guides/multiplayer-draw" },
           ],
+        },
+        {
+          label: "Deployment",
+          items: [
+            { label: "Overview", slug: "deployment/overview" },
+            { label: "Gateway", slug: "deployment/gateway" },
+            { label: "Runtime", slug: "deployment/runtime" },
+            { label: "NATS / JetStream", slug: "deployment/nats" },
+          ],
+        },
+        {
+          label: "CLI",
+          slug: "cli",
         },
         {
           label: "LLM Docs",

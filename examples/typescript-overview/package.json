@@ -1,13 +1,14 @@
 {
-  "name": "counter-example",
+  "name": "@zocket/typescript-overview",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:server": "bun --watch server.ts",
-    "start": "bun run server.ts",
+    "start": "bun run overview.ts",
+    "dev": "bun --watch overview.ts",
     "typecheck": "bunx tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@zocket/client": "workspace:*",
     "@zocket/core": "workspace:*",
     "@zocket/server": "workspace:*",
     "zod": "^4.1.12"

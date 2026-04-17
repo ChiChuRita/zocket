@@ -1,0 +1,82 @@
+---
+title: Gateway
+description: WebSocket edge for Zocket — authenticates sessions and bridges WS ↔ NATS.
+---
+
+`@zocket/gateway` is the WebSocket edge. Clients connect here. It authenticates each session with the control plane, publishes client messages onto the JetStream `INBOUND` work-queue, and fans outbound messages back to the right WebSocket.
+
+## What it does
+
+1. Accepts WebSocket connections on `PORT` (default `3000`).
+2. On upgrade it calls `POST /api/registry/authorize` on the control plane with the request host and bearer token.
+3. If authorized, it creates an **ephemeral ordered consumer** on the `OUTBOUND` stream filtered to this one session's subject (`outbound.{workspaceId}.{projectId}.{sessionId}`) and starts piping messages to the WebSocket.
+4. Every client frame is wrapped in an `InboundEnvelope` and published to `inbound.{ws}.{proj}.{actorType}.{actorId}` on the `INBOUND` stream.
+5. On connect/disconnect it publishes `session.connected.*` / `session.disconnected.*` on core NATS so runtimes can clean up per-session subscriptions.
+
+The gateway is **stateless**. You can run as many as you need behind a load balancer; each WebSocket is pinned to one gateway for its lifetime, but different sessions can land on any instance.
+
+## Environment variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORT` | `3000` | HTTP / WebSocket port |
+| `NATS_URL` | `nats://localhost:4222` | NATS cluster URL |
+| `CONTROL_PLANE_URL` | `http://localhost:3000` | Control-plane base URL |
+| `CONTROL_PLANE_INTERNAL_TOKEN` | `zocket-internal-dev-token` | Bearer token for `/api/registry/authorize` |
+
+There are no CLI flags — configuration is env-var only.
+
+## Running it
+
+The simplest local run:
+
+```bash
+bun ./packages/gateway/src/index.ts
+```
+
+In Docker the image is built from `packages/gateway/Dockerfile`. Set the env vars on the container.
+
+```yaml
+# docker-compose.yml excerpt
+gateway:
+  build: ./packages/gateway
+  ports:
+    - "3001:3000"
+  environment:
+    NATS_URL: nats://nats:4222
+    CONTROL_PLANE_URL: http://control-plane:3000
+    CONTROL_PLANE_INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+  depends_on:
+    - nats
+```
+
+## The `/api/registry/authorize` contract
+
+Your control plane implements the authorize endpoint. The gateway calls it like this:
+
+```http
+POST /api/registry/authorize
+Authorization: Bearer $CONTROL_PLANE_INTERNAL_TOKEN
+Content-Type: application/json
+
+{ "host": "my-app.zocket.app", "token": "<optional client-supplied JWT>" }
+```
+
+And expects this response:
+
+```ts
+{
+  workspaceId: string;
+  projectId: string;
+  userId: string | null;
+  claims: Record<string, unknown>;
+}
+```
+
+The returned `userId` and `claims` are attached to the `Connection` and forwarded to actors in `ctx`, so actor code can check authorization without reimplementing auth. The platform reference implementation supports three modes per project: `none`, `jwt-secret`, and `jwt-jwks`.
+
+## Scaling notes
+
+- **Horizontal scaling** — add more gateway replicas. NATS fans out session traffic correctly via filter subjects.
+- **Sticky sessions** — not required; the outbound consumer uses a session-scoped filter subject, so any gateway can serve any session (as long as it was the one that accepted the WebSocket).
+- **Connection limits** — tuning is a Bun / kernel concern. The gateway itself is I/O-bound and holds no per-session state beyond the open socket and its NATS consumer.

@@ -1,0 +1,68 @@
+---
+title: Deployment overview
+description: How Zocket runs in production — gateway, NATS JetStream, and the distributed runtime.
+---
+
+A single-process Zocket app (Bun adapter + WebSocket) is all you need to get started. For multi-region, multi-tenant, or hosted deployments you split the system into three processes connected by NATS JetStream.
+
+## The three roles
+
+```
+  Client ─► Gateway ─► NATS JetStream ─► Runtime ─► Actor code
+     ▲                     │                │
+     └──── OUTBOUND ◄──────┴────────────────┘
+```
+
+| Process | Package | Responsibility |
+| --- | --- | --- |
+| **Gateway** | `@zocket/gateway` | Terminates WebSockets, authenticates sessions, bridges WS ↔ NATS |
+| **Runtime** | `@zocket/runtime` | Hosts actor instances, executes methods, publishes state patches |
+| **NATS / JetStream** | `@zocket/nats-transport` | Durable work-queue (inbound) + per-session outbound buffer |
+
+The **control plane** (the hosted platform or your own build) sits alongside and handles auth, project config, and bundle storage. Gateways and runtimes call it over HTTP, not NATS.
+
+See the [architecture page](/architecture.html) for the full NATS subject map and actor execution model.
+
+## What goes where
+
+- All three processes share one NATS cluster.
+- Gateways are stateless and horizontally scalable — add more to handle more WebSockets.
+- Runtimes are keyed by project + deployment. A project typically has one runtime (scaled vertically), but NATS work-queue semantics mean you can run multiple runtimes behind the same consumer name if your actors are stateless enough to tolerate instance migration.
+- The control plane is the only component that talks to your database and object store.
+
+## Local development with Docker Compose
+
+`docker-compose.yml` at the repo root spins up NATS + gateway + runtime for local testing.
+
+```bash
+docker compose up
+```
+
+This starts:
+
+- **nats** — `nats:2.10-alpine` with JetStream enabled (`--jetstream --store_dir /data`), ports `4222` (client) and `8222` (monitoring)
+- **gateway** — built from `packages/gateway/Dockerfile`, exposed on host port `3001`
+- **runtime** — built from `packages/runtime/Dockerfile`, exposed on host port `8080`
+
+You'll still need a running control plane (your platform instance or the hosted one) — set `CONTROL_PLANE_URL` on both gateway and runtime.
+
+## Minimal env-var cheatsheet
+
+| Variable | Gateway | Runtime | Notes |
+| --- | :---: | :---: | --- |
+| `NATS_URL` | ✓ | ✓ | Default `nats://localhost:4222` |
+| `CONTROL_PLANE_URL` | ✓ | ✓ | Default `http://localhost:3000` |
+| `CONTROL_PLANE_INTERNAL_TOKEN` | ✓ | ✓ | Shared secret for `/api/internal/*` calls |
+| `PORT` | ✓ |   | HTTP port, default `3000` |
+| `API_PORT` |   | ✓ | Health/report API, default `8080` |
+| `BUNDLE_DIR` |   | ✓ | Where bundles are stored on disk, default `/app/bundles` |
+| `DEPLOYMENT_ID` |   | **required** | Fails to start if unset |
+| `WORKSPACE_ID` / `PROJECT_ID` |   | ✓ | Default to `local-workspace` / `local-project` |
+
+Full reference on the [Gateway](/deployment/gateway/), [Runtime](/deployment/runtime/), and [NATS transport](/deployment/nats/) pages.
+
+## Next steps
+
+- [Gateway configuration](/deployment/gateway/)
+- [Runtime configuration](/deployment/runtime/)
+- [NATS / JetStream setup](/deployment/nats/)

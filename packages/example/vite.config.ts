@@ -5,9 +5,20 @@ import path from "node:path";
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    alias: [
+      {
+        find: "@",
+        replacement: path.resolve(__dirname, "./src"),
+      },
+      {
+        find: /^@zocket\/core$/,
+        replacement: path.resolve(__dirname, "../core/src/index.ts"),
+      },
+      {
+        find: /^@zocket\/core\/(.*)$/,
+        replacement: path.resolve(__dirname, "../core/src/$1"),
+      },
+    ],
   },
   server: {
     port: 5173,

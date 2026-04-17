@@ -1,4 +1,4 @@
-import { createZocketReact } from "@zocket/react";
-import type { AppRouter } from "../../server";
+import { createZocketReact } from "../../../react/src/index";
+import type { ExampleApp } from "../../server";
 
-export const zocket = createZocketReact<AppRouter>();
+export const zocket = createZocketReact<ExampleApp>();

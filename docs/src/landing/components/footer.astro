@@ -2,18 +2,22 @@
 const year = new Date().getFullYear();
 ---
 
-<footer class="border-t border-white/[0.08]">
-  <div class="mx-auto flex max-w-7xl flex-col items-center gap-4 px-6 py-12">
+<footer class="border-t border-border mt-24">
+  <div class="mx-auto flex max-w-[1200px] flex-col items-center gap-4 px-6 py-12">
     <a href="/" class="flex items-center gap-2.5 transition-opacity hover:opacity-80">
       <img src="/favicon.svg" alt="Zocket logo" class="h-6 w-6" />
-      <span class="text-base font-semibold text-white">Zocket</span>
+      <span class="text-base font-semibold text-fg">Zocket</span>
     </a>
-    <div class="flex gap-6 text-sm">
-      <a href="https://github.com/ChiChuRita/zocket" class="font-medium text-white/72 transition-colors hover:text-white">GitHub</a>
-      <a href="/getting-started/" class="font-medium text-white/72 transition-colors hover:text-white">Documentation</a>
+    <div class="flex gap-6 text-sm text-fg-subtle">
+      <a href="https://github.com/ChiChuRita/zocket" class="transition-colors hover:text-fg">
+        GitHub
+      </a>
+      <a href="/getting-started/" class="transition-colors hover:text-fg">
+        Documentation
+      </a>
     </div>
-    <p class="text-xs text-white/45">
-      Made with 🧦 and TypeScript &middot; &copy; {year} Zocket
+    <p class="text-xs text-fg-faint">
+      Made with 🧦 and TypeScript · © {year} Zocket
     </p>
   </div>
 </footer>

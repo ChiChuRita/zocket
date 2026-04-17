@@ -1,92 +1,49 @@
 ---
+import DeployCard from "../components/deploy-card.astro";
 ---
 
-<section
-  class="relative flex flex-col gap-6"
-  style="--section-accent: hsl(152 70% 55%); --section-accent-strong: hsl(155 72% 72%);"
->
-  <div class="section-glow" style="background: var(--section-accent);"></div>
+<section class="relative flex flex-col gap-8">
+  <div class="section-glow"></div>
 
   <header class="reveal flex flex-col gap-3">
-    <h2 class="text-3xl font-bold tracking-tight text-white md:text-4xl">
-      How it <span style="color: var(--section-accent);">runs</span>
+    <h2>
+      How it <span class="text-brand">runs</span>
     </h2>
-    <p class="max-w-2xl text-base text-white/50 md:text-lg">
+    <p class="max-w-2xl text-base text-fg-muted md:text-lg">
       Start with one process. Scale to a distributed cluster when you need it.
     </p>
   </header>
 
-  <div class="reveal grid gap-4 md:grid-cols-3">
+  <div class="reveal grid gap-5 md:grid-cols-3">
+    <DeployCard
+      step="01"
+      title="Standalone"
+      description="One process, zero infra. For prototypes and small apps."
+      status="ready"
+      statusLabel="ready"
+      commands={[{ text: "serve(app, { port: 3000 })", tone: "brand" }]}
+    />
 
-    <!-- ── Standalone ────────────────────────────────── -->
-    <div
-      class="glow-card group flex flex-col gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5"
-      style="--hover-border: hsl(152 70% 55% / 0.28); --hover-glow: hsl(152 70% 55% / 0.08);"
-    >
-      <div class="flex items-center gap-2.5">
-        <span class="pulse-dot h-2 w-2 rounded-full bg-emerald-400"></span>
-        <span class="font-mono text-[10px] uppercase tracking-widest text-emerald-400/70">ready</span>
-      </div>
-      <div class="flex flex-col gap-1">
-        <div class="flex items-baseline gap-3">
-          <span class="step-num font-mono text-[11px] text-white/15">01</span>
-          <h2 class="text-xl font-bold text-white">Standalone</h2>
-        </div>
-        <p class="text-sm leading-relaxed text-white/45">
-          One process, zero infra. For prototypes and small apps.
-        </p>
-      </div>
-      <div class="mt-2 flex flex-col gap-1 rounded-xl border border-white/[0.06] bg-black/50 px-4 py-3 font-mono text-[13px] leading-relaxed text-white/50">
-        <div><span class="text-emerald-400/40">❯</span>{" "}serve(app, {"{"} port: 3000 {"}"})</div>
-      </div>
-    </div>
+    <DeployCard
+      step="02"
+      title="Distributed"
+      description="Gateway + NATS + runtime. Self-hosted, scales independently."
+      status="ready"
+      statusLabel="ready"
+      commands={[
+        { text: "docker compose up", tone: "info" },
+        { text: "zocket deploy", tone: "info" },
+      ]}
+    />
 
-    <!-- ── Distributed ───────────────────────────────── -->
-    <div
-      class="glow-card group flex flex-col gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5"
-      style="--hover-border: hsl(152 70% 55% / 0.28); --hover-glow: hsl(152 70% 55% / 0.08);"
-    >
-      <div class="flex items-center gap-2.5">
-        <span class="pulse-dot h-2 w-2 rounded-full bg-emerald-400"></span>
-        <span class="font-mono text-[10px] uppercase tracking-widest text-emerald-400/70">ready</span>
-      </div>
-      <div class="flex flex-col gap-1">
-        <div class="flex items-baseline gap-3">
-          <span class="step-num font-mono text-[11px] text-white/15">02</span>
-          <h2 class="text-xl font-bold text-white">Distributed</h2>
-        </div>
-        <p class="text-sm leading-relaxed text-white/45">
-          Gateway + NATS + runtime. Self-hosted, scales independently.
-        </p>
-      </div>
-      <div class="mt-2 flex flex-col gap-1 rounded-xl border border-white/[0.06] bg-black/50 px-4 py-3 font-mono text-[13px] leading-relaxed text-white/50">
-        <div><span class="text-sky-400/40">❯</span> docker compose up</div>
-        <div><span class="text-sky-400/40">❯</span> zocket deploy</div>
-      </div>
-    </div>
-
-    <!-- ── Platform ──────────────────────────────────── -->
-    <div
-      class="glow-card group flex flex-col gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 opacity-50"
-      style="--hover-border: hsl(152 70% 55% / 0.28); --hover-glow: hsl(152 70% 55% / 0.08);"
-    >
-      <div class="flex items-center gap-2.5">
-        <span class="h-2 w-2 rounded-full bg-white/20"></span>
-        <span class="font-mono text-[10px] uppercase tracking-widest text-white/30">coming soon</span>
-      </div>
-      <div class="flex flex-col gap-1">
-        <div class="flex items-baseline gap-3">
-          <span class="step-num font-mono text-[11px] text-white/15">03</span>
-          <h2 class="text-xl font-bold text-white">Platform</h2>
-        </div>
-        <p class="text-sm leading-relaxed text-white/45">
-          Multi-tenant, Firecracker isolation, fully hosted.
-        </p>
-      </div>
-      <div class="mt-2 flex flex-col gap-1 rounded-xl border border-white/[0.06] bg-black/50 px-4 py-3 font-mono text-[13px] leading-relaxed text-white/50">
-        <div><span class="text-primary/30">❯</span> zocket deploy --platform</div>
-      </div>
-    </div>
-
+    <DeployCard
+      step="03"
+      title="Platform"
+      description="Multi-tenant, Firecracker isolation, fully hosted."
+      status="soon"
+      statusLabel="coming soon"
+      muted
+      commands={[{ text: "zocket deploy --platform", tone: "brand" }]}
+    />
   </div>
 </section>

@@ -4,33 +4,16 @@ import { Button } from "../components/ui/button";
 const installCommand = "bun add @zocket/core @zocket/server @zocket/client zod";
 ---
 
-<section
-  class="reveal relative flex flex-col items-center gap-6 text-center"
-  style="--section-accent: hsl(30 100% 50%);"
->
-  <div class="section-glow" style="background: var(--section-accent);"></div>
+<section class="reveal relative flex flex-col items-center gap-6 text-center">
+  <div class="section-glow"></div>
 
-  <div
-    id="install-command-line"
-    class="terminal-cursor flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.03] px-5 py-3 font-mono text-sm text-white/40 transition-all duration-300"
-  >
-    <span class="text-primary/60">$</span>
-    <div class="terminal-loop-viewport">
-      <div class="terminal-loop-track">
-        <span class="terminal-loop-copy">{installCommand}</span>
-        <span class="terminal-loop-copy" aria-hidden="true">{installCommand}</span>
-      </div>
-    </div>
+  <div class="terminal-cursor flex items-center gap-2 rounded-xl border border-border bg-surface/60 px-5 py-3 font-mono text-sm text-fg-subtle">
+    <span class="text-brand/70">$</span>
+    <span>bun add @zocket/core @zocket/server @zocket/client zod</span>
   </div>
 
-  <Button
-    id="copy-install-command"
-    className="text-base px-8 transition-transform duration-200"
-    size="lg"
-    type="button"
-    data-command={installCommand}
-  >
-    Copy Command
+  <Button size="lg" asChild>
+    <a href="/getting-started/">Read the Docs</a>
   </Button>
 </section>
 

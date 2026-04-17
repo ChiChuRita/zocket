@@ -123,7 +123,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply font-sans bg-background text-foreground;
+    @apply font-sans bg-background text-foreground antialiased;
   }
   html {
     @apply antialiased font-sans;
@@ -131,13 +131,13 @@
   body::before {
     content: '';
     position: fixed;
-    top: -12rem;
+    top: -18rem;
     left: 50%;
     transform: translateX(-50%);
-    width: 56rem;
-    height: 38rem;
+    width: 48rem;
+    height: 32rem;
     background: radial-gradient(ellipse, var(--primary), transparent 70%);
-    opacity: 0.05;
+    opacity: 0.035;
     pointer-events: none;
     z-index: -1;
   }
@@ -146,8 +146,8 @@
     position: fixed;
     inset: 0;
     background-image: radial-gradient(var(--muted-foreground) 1px, transparent 1px);
-    background-size: 24px 24px;
-    opacity: 0.05;
+    background-size: 28px 28px;
+    opacity: 0.03;
     pointer-events: none;
     z-index: -1;
   }

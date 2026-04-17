@@ -73,30 +73,18 @@ room.state.subscribe((s) => {
     </div>
 
     <div class="hero-socks relative mx-auto hidden w-full max-w-[420px] aspect-square items-center justify-center xl:flex">
-      <div class="frame absolute inset-0"></div>
-      <div
-        class="orb"
-        style="--orb-top: 32%; --orb-left: 30%; --orb-size: 70%; --orb-color: color-mix(in oklab, var(--color-brand) 14%, transparent); --orb-tx: 0; --orb-ty: 0; --orb-blur: 30px;"
-      ></div>
-      <div class="absolute inset-[12%] rounded-full border border-border bg-[radial-gradient(circle_at_center,color-mix(in_oklab,var(--color-fg)_2%,transparent),transparent_65%)]"></div>
-
       <img
         src="/sock1.svg"
         alt=""
         aria-hidden="true"
-        class="anim-sock-left absolute left-[25%] top-[20%] w-[38%] drop-shadow-[0_22px_40px_rgba(0,0,0,0.35)] z-[2] will-change-transform"
+        class="anim-sock-left absolute left-[20%] top-[18%] w-[42%] drop-shadow-[0_22px_40px_rgba(0,0,0,0.35)] z-[2] will-change-transform"
       />
       <img
         src="/sock2.svg"
         alt=""
         aria-hidden="true"
-        class="anim-sock-right absolute right-[24%] top-[24%] w-[39%] drop-shadow-[0_22px_40px_rgba(0,0,0,0.35)] z-[1] will-change-transform"
+        class="anim-sock-right absolute right-[19%] top-[22%] w-[43%] drop-shadow-[0_22px_40px_rgba(0,0,0,0.35)] z-[1] will-change-transform"
       />
-
-      <div class="absolute left-1/2 bottom-5 -translate-x-1/2 inline-flex items-center gap-2 rounded-full border border-border bg-bg/60 px-3 py-2 font-mono text-[0.625rem] uppercase tracking-[0.16em] text-fg-subtle backdrop-blur">
-        <span class="h-1.5 w-1.5 rounded-full bg-brand/80"></span>
-        Stateful pair
-      </div>
     </div>
   </header>
 

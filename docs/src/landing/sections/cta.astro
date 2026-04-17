@@ -1,20 +1,14 @@
 ---
-import { Button } from "../components/ui/button";
-
-const installCommand = "bun add @zocket/core @zocket/server @zocket/client zod";
+import { buttonVariants } from "../components/ui/button";
 ---
 
 <section class="reveal relative flex flex-col items-center gap-6 text-center">
-  <div class="section-glow"></div>
-
   <div class="terminal-cursor flex items-center gap-2 rounded-xl border border-border bg-surface/60 px-5 py-3 font-mono text-sm text-fg-subtle">
     <span class="text-brand/70">$</span>
     <span>bun add @zocket/core @zocket/server @zocket/client zod</span>
   </div>
 
-  <Button size="lg" asChild>
-    <a href="/getting-started/">Read the Docs</a>
-  </Button>
+  <a href="/getting-started/" class={buttonVariants({ size: "lg" })}>Read the Docs</a>
 </section>
 
 <script>

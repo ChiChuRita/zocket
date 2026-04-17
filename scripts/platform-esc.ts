@@ -1,4 +1,7 @@
-export const rootDir = "/Users/rahulsingh/Dev/zocket";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+
+export const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const platformDir = `${rootDir}/platform`;
 export const defaultDevEnv = "rahul-zocket-io/zocket/platform-dev";
 export const defaultProdEnv = "rahul-zocket-io/zocket/platform-prod";

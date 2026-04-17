@@ -12,7 +12,7 @@ import {
 const firstArg = process.argv[2];
 
 if (firstArg === "--help" || firstArg === "-h") {
-  console.log(`Usage: bun run platform:push [esc-environment]
+  console.log(`Usage: bun run platform:deploy [esc-environment]
 
 Builds and deploys the platform with Wrangler using secrets resolved from
 Pulumi ESC. Defaults to the prod environment and falls back to the dev

@@ -1,6 +1,5 @@
 ---
 import { createHighlighter } from "shiki";
-import { ComparisonShowcase } from "../components/comparison-showcase";
 
 const highlighter = await createHighlighter({
   themes: ["github-dark"],
@@ -322,19 +321,16 @@ await agent.start({ prompt: "Summarize this" });`),
 ];
 ---
 
-<section class="relative flex flex-col gap-8">
-  <div class="section-glow bg-primary"></div>
+<section
+  class="relative flex flex-col gap-8"
+  style="--section-accent: hsl(211 89% 64%); --section-accent-strong: hsl(213 94% 78%); --section-accent-soft: hsl(211 89% 64% / 0.12); --section-accent-border: hsl(211 89% 64% / 0.22);"
+>
+  <div class="section-glow" style="background: var(--section-accent);"></div>
 
   <header class="reveal flex flex-col gap-4">
-    <div class="flex items-center gap-3">
-      <span class="h-px w-10 bg-gradient-to-r from-primary/80 to-transparent"></span>
-      <span class="font-mono text-[11px] uppercase tracking-[0.24em] text-primary/70">
-        Benchmarked side by side
-      </span>
-    </div>
     <div class="max-w-3xl">
       <h2 class="text-3xl font-bold tracking-tight text-white md:text-4xl">
-        Same feature, <span class="text-primary">very different</span> runtime model.
+        Same feature, <span style="color: var(--section-accent);">very different</span> runtime model.
       </h2>
       <p class="mt-3 max-w-2xl text-base text-white/45 md:text-lg">
         Compare the amount of ceremony, infrastructure assumptions, and state management you carry into each use case.
@@ -342,12 +338,168 @@ await agent.start({ prompt: "Summarize this" });`),
     </div>
   </header>
 
-  <div class="reveal">
-    <ComparisonShowcase comparisons={comparisons} client:visible />
+  <div class="reveal" data-comparison-root>
+    <div class="flex flex-col gap-6">
+      <div class="flex flex-col gap-3">
+        <div
+          role="tablist"
+          aria-label="Comparison tabs"
+          class="comparison-tablist inline-flex max-w-full items-center gap-1.5 overflow-x-auto rounded-2xl border border-white/[0.06] bg-white/[0.03] p-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.2)] backdrop-blur-md"
+        >
+          {comparisons.map((c, i) => (
+            <button
+              type="button"
+              role="tab"
+              id={`comparison-trigger-${c.id}`}
+              aria-controls={`comparison-panel-${c.id}`}
+              aria-selected={i === 0 ? "true" : "false"}
+              class:list={[
+                "comparison-trigger inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none",
+                i === 0 && "is-active",
+              ]}
+              data-comparison-trigger
+              data-target={c.id}
+            >
+              vs {c.competitor}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {comparisons.map((c, i) => (
+        <div
+          id={`comparison-panel-${c.id}`}
+          role="tabpanel"
+          aria-labelledby={`comparison-trigger-${c.id}`}
+          class:list={[
+            "comparison-panel flex flex-col gap-5",
+            i !== 0 && "hidden",
+          ]}
+          data-comparison-panel
+          data-panel-id={c.id}
+          hidden={i !== 0}
+        >
+          <div class="flex flex-col gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.025] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="rounded-full border border-white/[0.08] bg-black/30 px-3 py-1 font-mono text-[11px] uppercase tracking-[0.2em] text-white/35">
+                Use case
+              </span>
+              <span class="text-lg font-semibold text-white/95">{c.useCase}</span>
+            </div>
+            <p class="max-w-2xl text-sm leading-relaxed text-white/45 sm:text-right">
+              {c.description}
+            </p>
+          </div>
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="flex flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0d0d0d]/92 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors duration-300 hover:border-white/[0.12]">
+              <div class="flex items-center border-b border-white/[0.06] px-5 py-3">
+                <div class="flex gap-2">
+                  <div class="h-3 w-3 rounded-full bg-white/[0.08]"></div>
+                  <div class="h-3 w-3 rounded-full bg-white/[0.08]"></div>
+                  <div class="h-3 w-3 rounded-full bg-white/[0.08]"></div>
+                </div>
+                <span class="mx-auto font-mono text-[11px] font-medium tracking-wide text-white/25 uppercase">
+                  {c.competitorFile}
+                </span>
+                <span class="rounded bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-white/40">
+                  {c.competitor}
+                </span>
+              </div>
+              <div
+                class="comparison-code max-h-[400px] overflow-auto px-5 py-4 text-[13px] leading-relaxed"
+                set:html={c.competitorHtml}
+              />
+            </div>
+
+            <div class="flex flex-col overflow-hidden rounded-2xl border bg-[#0d0d0d]/92 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors duration-300" style="border-color: var(--section-accent-border);">
+              <div class="flex items-center border-b px-5 py-3" style="border-color: color-mix(in srgb, var(--section-accent) 10%, transparent);">
+                <div class="flex gap-2">
+                  <div class="h-3 w-3 rounded-full" style="background: color-mix(in srgb, var(--section-accent) 20%, transparent);"></div>
+                  <div class="h-3 w-3 rounded-full" style="background: color-mix(in srgb, var(--section-accent) 20%, transparent);"></div>
+                  <div class="h-3 w-3 rounded-full" style="background: color-mix(in srgb, var(--section-accent) 20%, transparent);"></div>
+                </div>
+                <span class="mx-auto font-mono text-[11px] font-medium tracking-wide text-white/25 uppercase">
+                  {c.zocketFile}
+                </span>
+                <span class="rounded px-2 py-0.5 font-mono text-[10px]" style="background: color-mix(in srgb, var(--section-accent) 10%, transparent); color: var(--section-accent);">
+                  Zocket
+                </span>
+              </div>
+              <div
+                class="comparison-code max-h-[400px] overflow-auto px-5 py-4 text-[13px] leading-relaxed"
+                set:html={c.zocketHtml}
+              />
+            </div>
+          </div>
+
+          <div class="rounded-2xl border px-4 py-3 text-sm leading-relaxed text-white/55" style="border-color: color-mix(in srgb, var(--section-accent) 10%, transparent); background: color-mix(in srgb, var(--section-accent) 5%, transparent);">
+            <span class="mr-2 font-mono text-[11px] uppercase tracking-[0.2em]" style="color: color-mix(in srgb, var(--section-accent-strong) 70%, transparent);">
+              Takeaway
+            </span>
+            {c.takeaway}
+          </div>
+        </div>
+      ))}
+    </div>
   </div>
 </section>
 
+<script>
+  document.querySelectorAll("[data-comparison-root]").forEach((root) => {
+    const triggers = Array.from(root.querySelectorAll("[data-comparison-trigger]"));
+    const panels = Array.from(root.querySelectorAll("[data-comparison-panel]"));
+
+    const selectTab = (id) => {
+      triggers.forEach((trigger) => {
+        const isActive = trigger.dataset.target === id;
+        trigger.classList.toggle("is-active", isActive);
+        trigger.setAttribute("aria-selected", String(isActive));
+      });
+
+      panels.forEach((panel) => {
+        const isActive = panel.dataset.panelId === id;
+        panel.toggleAttribute("hidden", !isActive);
+        panel.classList.toggle("hidden", !isActive);
+      });
+    };
+
+    triggers.forEach((trigger) => {
+      trigger.addEventListener("click", () => selectTab(trigger.dataset.target));
+    });
+  });
+</script>
+
 <style is:global>
+  .comparison-tablist {
+    scrollbar-width: none;
+  }
+  .comparison-tablist::-webkit-scrollbar {
+    display: none;
+  }
+  .comparison-trigger {
+    appearance: none;
+    -webkit-appearance: none;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: rgb(255 255 255 / 0.45);
+    cursor: pointer;
+  }
+  .comparison-trigger:hover {
+    background: rgb(255 255 255 / 0.03);
+    color: rgb(255 255 255 / 0.85);
+  }
+  .comparison-trigger:focus-visible {
+    box-shadow:
+      inset 0 0 0 1px var(--section-accent-border),
+      0 0 0 1px color-mix(in srgb, var(--section-accent) 20%, transparent);
+  }
+  .comparison-trigger.is-active {
+    background: var(--section-accent-soft);
+    color: var(--section-accent-strong);
+    box-shadow: inset 0 0 0 1px var(--section-accent-border);
+  }
   .comparison-code {
     font-family: "JetBrains Mono", monospace;
     font-variant-ligatures: none;

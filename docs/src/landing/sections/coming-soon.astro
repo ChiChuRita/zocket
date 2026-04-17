@@ -2,16 +2,21 @@
 const features = ["Timers", "Cron", "Actor-to-Actor", "Streaming", "AI SDK Integration"];
 ---
 
-<section class="reveal relative flex flex-col items-center gap-5 text-center">
+<section
+  class="reveal relative flex flex-col items-center gap-5 text-center"
+  style="--section-accent: hsl(272 85% 70%); --section-accent-strong: hsl(276 100% 82%); --section-accent-soft: hsl(272 85% 70% / 0.08); --section-accent-border: hsl(272 85% 70% / 0.22);"
+>
+  <div class="section-glow" style="background: var(--section-accent);"></div>
   <h2 class="text-2xl font-bold tracking-tight text-white md:text-3xl">
-    Coming <span class="text-primary">soon</span>
+    Coming <span style="color: var(--section-accent);">soon</span>
   </h2>
 
   <div class="flex flex-wrap justify-center gap-2.5">
     {features.map((f) => (
       <a
         href="/roadmap/"
-        class="roadmap-tag rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-1.5 font-mono text-xs text-white/50 transition-all duration-300 hover:border-primary/30 hover:bg-primary/[0.04] hover:text-primary/80"
+        class="roadmap-tag rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-1.5 font-mono text-xs text-white/50 transition-all duration-300"
+        style="--tag-accent: var(--section-accent); --tag-accent-strong: var(--section-accent-strong); --tag-accent-soft: var(--section-accent-soft); --tag-accent-border: var(--section-accent-border);"
       >
         {f}
       </a>
@@ -20,8 +25,16 @@ const features = ["Timers", "Cron", "Actor-to-Actor", "Streaming", "AI SDK Integ
 
   <p class="text-sm text-white/35">
     These features are designed and in progress.
-    <a href="/roadmap/" class="text-primary/60 transition-colors hover:text-primary">
+    <a href="/roadmap/" class="transition-colors" style="color: color-mix(in srgb, var(--section-accent) 60%, white 40%);">
       Read the roadmap &rarr;
     </a>
   </p>
 </section>
+
+<style>
+  .roadmap-tag:hover {
+    border-color: var(--tag-accent-border);
+    background: var(--tag-accent-soft);
+    color: var(--tag-accent-strong);
+  }
+</style>

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit",
+    "destroy": "pulumi destroy",
     "preview": "pulumi preview",
     "up": "pulumi up"
   },

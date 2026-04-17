@@ -1,0 +1,38 @@
+{
+  "name": "@zocket/example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:server": "bun --watch server.ts",
+    "dev:web": "bunx --bun vite",
+    "build:web": "bunx --bun vite build",
+    "preview": "bunx --bun vite preview",
+    "typecheck": "bunx tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.0.2",
+    "@radix-ui/react-tabs": "^1.1.1",
+    "@tanstack/react-query": "^5.62.7",
+    "@zocket/client": "workspace:*",
+    "@zocket/core": "workspace:*",
+    "@zocket/react": "workspace:*",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.323.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^2.2.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.4.2"
+  }
+}

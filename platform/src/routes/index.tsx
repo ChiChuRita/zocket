@@ -1,6 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -27,8 +26,13 @@ import {
   EmptyTitle,
 } from "../components/ui/empty";
 import { Separator } from "../components/ui/separator";
+import { Badge } from "../components/ui/badge";
+import { StatusDot } from "../components/ui/status-dot";
+import { CodeChip } from "../components/ui/code-chip";
+import { PageHeader } from "../components/page-header";
 import { requireWorkOsUser } from "../lib/auth";
 import { projectsQueryOptions } from "../lib/platform-queries";
+import type { ProjectSummary } from "../lib/platform-types";
 import { useSession } from "../lib/session";
 
 export const Route = createFileRoute("/")({
@@ -49,7 +53,7 @@ function DashboardPage() {
   if (!session.ready || projectsQuery.isLoading) {
     return (
       <div className="flex items-center gap-3 py-16 text-muted-foreground">
-        <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+        <StatusDot variant="active" size="sm" />
         <span className="text-sm">Loading projects...</span>
       </div>
     );
@@ -59,38 +63,36 @@ function DashboardPage() {
     return (
       <Card>
         <CardContent className="pt-6">
-          <p>Sign in to load your projects.</p>
+          <p className="text-sm text-muted-foreground">Sign in to load your projects.</p>
         </CardContent>
       </Card>
     );
   }
 
-  const data = projectsQuery.data;
-  const projects = data?.projects ?? [];
+  const data = projectsQuery.data as { workspace: { name: string }; projects: ProjectSummary[] } | undefined;
+  const projects: ProjectSummary[] = data?.projects ?? [];
   const runningProjects = projects.filter((entry) => entry.activeDeployment).length;
 
   return (
     <div className="flex flex-col gap-10">
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-2">
-          <h1 className="font-heading text-3xl font-bold tracking-tight">
-            {data?.workspace.name ?? "Workspace"}
-          </h1>
-          <p className="text-muted-foreground">
-            {projects.length === 0
-              ? "Create a project, then deploy the first bundle from the Zocket CLI."
-              : `${runningProjects} of ${projects.length} project${projects.length !== 1 ? "s" : ""} with active deployments`}
-          </p>
-        </div>
-        <Button asChild>
-          <Link to="/projects/new">Create Project</Link>
-        </Button>
-      </div>
+      <PageHeader
+        title={data?.workspace.name ?? "Workspace"}
+        description={
+          projects.length === 0
+            ? "Create a project, then deploy the first bundle from the Zocket CLI."
+            : `${runningProjects} of ${projects.length} project${projects.length !== 1 ? "s" : ""} with active deployments`
+        }
+        actions={
+          <Button asChild>
+            <Link to="/projects/new">Create Project</Link>
+          </Button>
+        }
+      />
 
       <Card>
         <CardHeader>
           <CardTitle>Projects</CardTitle>
-          <CardDescription>Copy the endpoint directly or open a project for deploy details.</CardDescription>
+          <CardDescription>Copy the endpoint or open a project for deploy details.</CardDescription>
         </CardHeader>
         <Separator />
         <CardContent className="pt-6">
@@ -99,7 +101,8 @@ function DashboardPage() {
               <EmptyHeader>
                 <EmptyTitle>No projects yet</EmptyTitle>
                 <EmptyDescription>
-                  Create a project in the dashboard, then run `zocket link` and `zocket deploy` from your app directory.
+                  Create a project, then run <code className="font-mono">zocket link</code> and{" "}
+                  <code className="font-mono">zocket deploy</code> from your app directory.
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
@@ -115,8 +118,9 @@ function DashboardPage() {
                   <Item variant="outline">
                     <ItemHeader>
                       <div className="flex items-center gap-2.5">
-                        <div
-                          className={`h-2 w-2 rounded-full ${entry.activeDeployment ? "bg-primary" : "bg-muted-foreground/40"}`}
+                        <StatusDot
+                          variant={entry.activeDeployment ? "active" : "muted"}
+                          size="sm"
                         />
                         <ItemTitle>{entry.project.name}</ItemTitle>
                       </div>
@@ -126,9 +130,7 @@ function DashboardPage() {
                     </ItemHeader>
                     <ItemContent>
                       <ItemDescription>
-                        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                          {`wss://${entry.project.domain}`}
-                        </code>
+                        <CodeChip value={`wss://${entry.project.domain}`} />
                       </ItemDescription>
                     </ItemContent>
                     <ItemActions>

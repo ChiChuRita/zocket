@@ -3,10 +3,13 @@ import starlight from "@astrojs/starlight";
 import starlightThemeNext from "starlight-theme-next";
 import starlightLlmsTxt from "starlight-llms-txt";
 import react from "@astrojs/react";
-import tailwind from "@astrojs/tailwind";
+import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   site: "https://zocket.io",
+  vite: {
+    plugins: [tailwindcss()],
+  },
   integrations: [
     starlight({
       plugins: [
@@ -143,6 +146,5 @@ export default defineConfig({
       ],
     }),
     react(),
-    tailwind({ applyBaseStyles: false }),
   ],
 });

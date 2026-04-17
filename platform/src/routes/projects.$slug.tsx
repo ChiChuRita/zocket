@@ -11,16 +11,10 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
-import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemHeader,
-  ItemSeparator,
-  ItemTitle,
-} from "../components/ui/item";
 import { Separator } from "../components/ui/separator";
+import { StatusDot } from "../components/ui/status-dot";
+import { CodeChip } from "../components/ui/code-chip";
+import { PageHeader } from "../components/page-header";
 import { requireWorkOsUser } from "../lib/auth";
 import { getApi, readApiData } from "../lib/api";
 import { projectBySlugQueryOptions } from "../lib/platform-queries";
@@ -57,133 +51,123 @@ function ProjectDetailPage() {
     },
   });
 
-  if (!session.ready) {
+  if (!session.ready || projectQuery.isLoading) {
     return (
       <div className="flex items-center gap-3 py-16 text-muted-foreground">
-        <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+        <StatusDot variant="active" size="sm" />
         <span className="text-sm">Loading project...</span>
       </div>
     );
   }
 
   if (!session.workosUser?.email) {
-    return <p className="py-16 text-muted-foreground">Sign in to view project details.</p>;
-  }
-
-  if (projectQuery.isLoading) {
-    return (
-      <div className="flex items-center gap-3 py-16 text-muted-foreground">
-        <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-        <span className="text-sm">Loading project...</span>
-      </div>
-    );
+    return <p className="py-16 text-sm text-muted-foreground">Sign in to view project details.</p>;
   }
 
   const project = projectQuery.data?.project ?? null;
+  const isDeployed = Boolean(project?.activeDeploymentId);
   const tokenPreview = createDeployTokenMutation.data?.token ?? null;
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <div
-            className={`h-3 w-3 rounded-full ${project?.activeDeploymentId ? "bg-primary animate-pulse" : "bg-muted-foreground/40"}`}
-          />
-          <h1 className="font-heading text-3xl font-bold tracking-tight">
-            {project?.name ?? slug}
-          </h1>
+    <div className="flex flex-col gap-10">
+      <PageHeader
+        breadcrumbs={[
+          { label: "Dashboard", to: "/" },
+          { label: project?.name ?? slug },
+        ]}
+        title={project?.name ?? slug}
+        description="Stable project domain and deployment target for your Zocket app."
+        actions={
+          <div className="flex items-center gap-2">
+            <StatusDot variant={isDeployed ? "active" : "muted"} />
+            <Badge variant={isDeployed ? "default" : "secondary"}>
+              {isDeployed ? "Deployed" : "Not deployed"}
+            </Badge>
+          </div>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Left 2/3: deploy tokens + status */}
+        <div className="flex flex-col gap-6 lg:col-span-2">
+          <Alert>
+            <AlertTitle>{isDeployed ? "Live" : "Not deployed yet"}</AlertTitle>
+            <AlertDescription>
+              {isDeployed
+                ? `Connect clients to wss://${project!.domain} and deploy new bundles from the Zocket CLI.`
+                : `Run zocket link and zocket deploy from your app directory to push the first bundle.`}
+            </AlertDescription>
+          </Alert>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Deploy Token</CardTitle>
+              <CardDescription>
+                Create a token to authenticate CLI deployments from CI or a local machine.
+              </CardDescription>
+            </CardHeader>
+            <Separator />
+            <CardContent className="pt-6">
+              {tokenPreview ? (
+                <div className="flex flex-col gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    Copy this now — it will not be shown again.
+                  </p>
+                  <CodeChip
+                    value={tokenPreview}
+                    className="rounded-xl py-2.5 px-4 text-xs"
+                  />
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No token created yet. Click below to generate one.
+                </p>
+              )}
+            </CardContent>
+            <CardFooter>
+              <Button
+                disabled={!project || createDeployTokenMutation.isPending}
+                onClick={() => createDeployTokenMutation.mutate()}
+                variant={tokenPreview ? "secondary" : "default"}
+              >
+                {createDeployTokenMutation.isPending
+                  ? "Creating..."
+                  : tokenPreview
+                    ? "Create Another Token"
+                    : "Create Deploy Token"}
+              </Button>
+            </CardFooter>
+          </Card>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">{project?.domain ?? "loading"}</Badge>
-          <Badge variant={project?.activeDeploymentId ? "default" : "secondary"}>
-            {project?.activeDeploymentId ? "Deployed" : "Not deployed"}
-          </Badge>
+
+        {/* Right 1/3: connection info */}
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Connect</CardTitle>
+              <CardDescription>Use these values from clients and the CLI.</CardDescription>
+            </CardHeader>
+            <Separator />
+            <CardContent className="flex flex-col gap-5 pt-6">
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-medium text-muted-foreground">WebSocket endpoint</p>
+                <CodeChip value={`wss://${project?.domain ?? slug}`} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-medium text-muted-foreground">Domain</p>
+                <CodeChip value={project?.domain ?? slug} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-medium text-muted-foreground">Deploy via CLI</p>
+                <div className="flex flex-col gap-1">
+                  <CodeChip value="zocket link" copyable={false} />
+                  <CodeChip value="zocket deploy" copyable={false} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-        <p className="text-muted-foreground">
-          Stable project domain and deployment target for your Zocket app.
-        </p>
       </div>
-
-      <Alert>
-        <AlertTitle>{project?.activeDeploymentId ? "Deployed" : "Not deployed yet"}</AlertTitle>
-        <AlertDescription>
-          {project?.activeDeploymentId
-            ? `Connect clients to wss://${project.domain} and deploy new bundles from the Zocket CLI.`
-            : `This project has a stable domain at wss://${project?.domain ?? slug}. Run zocket link and zocket deploy to upload the first bundle.`}
-        </AlertDescription>
-      </Alert>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Connect</CardTitle>
-          <CardDescription>Use the stable domain below from clients and the CLI.</CardDescription>
-        </CardHeader>
-        <Separator />
-        <CardContent className="pt-6">
-          <ItemGroup>
-            <Item variant="outline">
-              <ItemHeader>
-                <ItemTitle>WebSocket endpoint</ItemTitle>
-              </ItemHeader>
-              <ItemContent>
-                <ItemDescription>
-                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                    {`wss://${project?.domain ?? slug}`}
-                  </code>
-                </ItemDescription>
-              </ItemContent>
-            </Item>
-            <ItemSeparator />
-            <Item variant="outline">
-              <ItemHeader>
-                <ItemTitle>Project domain</ItemTitle>
-              </ItemHeader>
-              <ItemContent>
-                <ItemDescription>
-                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                    {project?.domain ?? slug}
-                  </code>
-                </ItemDescription>
-              </ItemContent>
-            </Item>
-            <ItemSeparator />
-            <Item variant="outline">
-              <ItemHeader>
-                <ItemTitle>Deploy with CLI</ItemTitle>
-              </ItemHeader>
-              <ItemContent>
-                <ItemDescription>
-                  Run <code className="rounded bg-muted px-1 py-0.5 text-xs">zocket link</code>, then{" "}
-                  <code className="rounded bg-muted px-1 py-0.5 text-xs">zocket deploy</code> from your app directory.
-                </ItemDescription>
-              </ItemContent>
-            </Item>
-          </ItemGroup>
-        </CardContent>
-        <CardFooter>
-          <Button
-            disabled={!project || createDeployTokenMutation.isPending}
-            onClick={() => createDeployTokenMutation.mutate()}
-          >
-            {createDeployTokenMutation.isPending ? "Creating Deploy Token..." : "Create Deploy Token"}
-          </Button>
-        </CardFooter>
-      </Card>
-
-      {tokenPreview ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Deploy Token</CardTitle>
-            <CardDescription>Copy this now. It is only shown once.</CardDescription>
-          </CardHeader>
-          <Separator />
-          <CardContent className="pt-6">
-            <code className="block overflow-x-auto rounded-lg border border-primary/20 bg-primary/[0.04] p-4 text-sm">
-              {tokenPreview}
-            </code>
-          </CardContent>
-        </Card>
-      ) : null}
     </div>
   );
 }

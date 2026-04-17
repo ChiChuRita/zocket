@@ -15,6 +15,7 @@ import {
   FieldLabel,
 } from "../components/ui/field";
 import { Input } from "../components/ui/input";
+import { PageHeader } from "../components/page-header";
 import { requireWorkOsUser } from "../lib/auth";
 import { getApi, readApiData } from "../lib/api";
 import type { CreateProjectResponse } from "../lib/platform-types";
@@ -46,18 +47,23 @@ function NewProjectPage() {
         }),
       );
     },
-    onSuccess: async (result) => {
+    onSuccess: async (result: CreateProjectResponse) => {
       await navigate({ to: "/projects/$slug", params: { slug: result.summary.project.slug } });
     },
   });
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="font-heading text-3xl font-bold tracking-tight">Create project</h1>
-        <p className="text-muted-foreground">Create a new project and link your CLI to it.</p>
-      </div>
-      <Card className="max-w-2xl">
+    <div className="flex flex-col gap-10">
+      <PageHeader
+        breadcrumbs={[
+          { label: "Dashboard", to: "/" },
+          { label: "New project" },
+        ]}
+        title="Create project"
+        description="Name your project and link the CLI to start deploying."
+      />
+
+      <Card className="max-w-xl">
         <form
           onSubmit={async (event) => {
             event.preventDefault();
@@ -79,7 +85,11 @@ function NewProjectPage() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="project-slug">Slug</FieldLabel>
-                <Input id="project-slug" value={slug} onChange={(event) => setSlug(event.target.value)} />
+                <Input
+                  id="project-slug"
+                  value={slug}
+                  onChange={(event) => setSlug(event.target.value)}
+                />
                 <FieldDescription>Optional. Leave blank to generate one automatically.</FieldDescription>
               </Field>
               {createProjectMutation.error ? (
@@ -87,9 +97,12 @@ function NewProjectPage() {
               ) : null}
             </FieldGroup>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="gap-3">
             <Button type="submit" disabled={createProjectMutation.isPending}>
-              {createProjectMutation.isPending ? "Creating Project..." : "Create Project"}
+              {createProjectMutation.isPending ? "Creating..." : "Create Project"}
+            </Button>
+            <Button type="button" variant="ghost" asChild>
+              <a href="/">Cancel</a>
             </Button>
           </CardFooter>
         </form>

@@ -323,20 +323,15 @@ await agent.start({ prompt: "Summarize this" });`),
 ---
 
 <section class="relative flex flex-col gap-8">
-  <div class="section-glow bg-primary"></div>
+  <div class="section-glow"></div>
 
   <header class="reveal flex flex-col gap-4">
-    <div class="flex items-center gap-3">
-      <span class="h-px w-10 bg-gradient-to-r from-primary/80 to-transparent"></span>
-      <span class="font-mono text-[11px] uppercase tracking-[0.24em] text-primary/70">
-        Benchmarked side by side
-      </span>
-    </div>
-    <div class="max-w-3xl">
-      <h2 class="text-3xl font-bold tracking-tight text-white md:text-4xl">
-        Same feature, <span class="text-primary">very different</span> runtime model.
+    <div class="eyebrow">Benchmarked side by side</div>
+    <div class="max-w-3xl flex flex-col gap-3">
+      <h2>
+        Same feature, <span class="text-brand">very different</span> runtime model.
       </h2>
-      <p class="mt-3 max-w-2xl text-base text-white/45 md:text-lg">
+      <p class="max-w-2xl text-base text-fg-muted md:text-lg">
         Compare the amount of ceremony, infrastructure assumptions, and state management you carry into each use case.
       </p>
     </div>
@@ -349,18 +344,17 @@ await agent.start({ prompt: "Summarize this" });`),
 
 <style is:global>
   .comparison-code {
-    font-family: "JetBrains Mono", monospace;
+    font-family: var(--font-mono);
     font-variant-ligatures: none;
     tab-size: 2;
   }
-  .comparison-code pre {
+  .comparison-code pre,
+  .comparison-code code {
     background: transparent !important;
     margin: 0;
     padding: 0;
-    overflow: visible !important;
   }
-  .comparison-code code {
-    background: transparent !important;
-    font-family: inherit;
+  .comparison-code pre {
+    overflow: visible !important;
   }
 </style>

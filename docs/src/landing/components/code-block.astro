@@ -5,33 +5,43 @@ interface Props {
   title: string;
   code: string;
   lang?: string;
+  label?: string;
+  variant?: "default" | "brand";
+  maxHeight?: string;
 }
 
-const { title, code, lang = "typescript" } = Astro.props;
+const {
+  title,
+  code,
+  lang = "typescript",
+  label,
+  variant = "default",
+  maxHeight = "min(50vh, 28rem)",
+} = Astro.props;
 ---
 
-<div class="code-frame flex w-full flex-col rounded-2xl border border-white/[0.08] bg-[#0d0d0d]/92 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors duration-300 hover:border-white/[0.12]">
-  <div class="flex items-center border-b border-white/[0.06] px-5 py-3">
-    <div class="flex gap-2">
-      <div class="h-3 w-3 rounded-full bg-white/[0.08]"></div>
-      <div class="h-3 w-3 rounded-full bg-white/[0.08]"></div>
-      <div class="h-3 w-3 rounded-full bg-white/[0.08]"></div>
+<div class:list={["code-frame flex w-full flex-col overflow-hidden", variant === "brand" && "code-frame--brand"]}>
+  <div class="code-header">
+    <div class="code-header__dots">
+      <span></span><span></span><span></span>
     </div>
-    <span class="mx-auto font-mono text-[11px] font-medium tracking-wide text-white/25 uppercase">{title}</span>
-    <div class="w-[48px]"></div>
+    <span class="code-header__title">{title}</span>
+    {label ? (
+      <span
+        class:list={[
+          "rounded-full px-2 py-0.5 font-mono text-[10px]",
+          variant === "brand"
+            ? "bg-brand/10 text-brand"
+            : "bg-fg/[0.06] text-fg-subtle",
+        ]}
+      >
+        {label}
+      </span>
+    ) : (
+      <span class="w-10"></span>
+    )}
   </div>
-  <div class="code-content max-h-[320px] overflow-auto px-5 py-4 text-[13px] leading-relaxed">
+  <div class="code-body" style={`max-height: ${maxHeight};`}>
     <Code code={code.trim()} lang={lang} theme="github-dark" />
   </div>
 </div>
-
-<style>
-  .code-content :global(pre) {
-    background: transparent !important;
-    margin: 0;
-    padding: 0;
-  }
-  .code-content :global(code) {
-    background: transparent !important;
-  }
-</style>

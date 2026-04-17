@@ -33,12 +33,20 @@ Your adapter must provide objects that implement `Connection`:
 
 ```ts
 interface Connection {
+  /** Send a serialized message down the transport. */
   send(message: string): void;
-  id: string; // Stable identifier for lifecycle hooks
+  /** Stable identifier for lifecycle hooks. Assigned by the adapter. */
+  id: string;
+  /** Authenticated user identity, when the transport provides it. */
+  userId?: string | null;
+  /** Verified auth claims or other connection-scoped metadata. */
+  claims?: Record<string, unknown>;
+  /** Optional routing scope attached by the transport layer. */
+  scope?: Record<string, string>;
 }
 ```
 
-The `id` must be unique per connection and stable for its lifetime.
+The `id` must be unique per connection and stable for its lifetime. The optional `userId`, `claims`, and `scope` fields flow through from the transport (e.g. the gateway's JWT verification) into method `ctx` and actor lifecycle hooks, so actors can use them for authorization.
 
 ## Wiring to a Custom Runtime
 

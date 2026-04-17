@@ -283,16 +283,45 @@
     overflow: auto;
   }
 
-  /* Section-level ambient glow */
+  /* ---------------------------------------------------------------- */
+  /*  Section accent system                                           */
+  /*  Opt in by adding data-accent="cyan|violet|emerald|pink|brand"   */
+  /*  to the <section>. All --section-accent-* / --tag-accent-* vars  */
+  /*  cascade from the chosen color.                                  */
+  /* ---------------------------------------------------------------- */
+  [data-accent] {
+    --section-accent:        var(--color-brand);
+    --section-accent-strong: var(--color-brand-strong);
+    --section-accent-soft:   color-mix(in srgb, var(--section-accent) 12%, transparent);
+    --section-accent-border: color-mix(in srgb, var(--section-accent) 28%, transparent);
+    --section-accent-glow:   color-mix(in srgb, var(--section-accent) 10%, transparent);
+    /* Legacy aliases used by tag-style components */
+    --tag-accent-soft:   var(--section-accent-soft);
+    --tag-accent-border: var(--section-accent-border);
+    --tag-accent-strong: var(--section-accent-strong);
+  }
+  [data-accent="cyan"]    { --section-accent: var(--color-accent-cyan);    --section-accent-strong: oklch(0.88 0.14 215); }
+  [data-accent="violet"]  { --section-accent: var(--color-accent-violet);  --section-accent-strong: oklch(0.86 0.18 300); }
+  [data-accent="emerald"] { --section-accent: var(--color-accent-emerald); --section-accent-strong: oklch(0.86 0.17 158); }
+  [data-accent="pink"]    { --section-accent: var(--color-accent-pink);    --section-accent-strong: oklch(0.86 0.18 355); }
+  [data-accent="brand"]   { --section-accent: var(--color-brand);          --section-accent-strong: var(--color-brand-strong); }
+
+  /* Section-level ambient glow — anchored to the section header,
+     fades downward in the section accent color */
   .section-glow {
     position: absolute;
     top: 0;
     left: 50%;
-    transform: translateX(-50%);
-    width: min(48rem, 80%);
+    transform: translate(-50%, -35%);
+    width: min(80rem, 120%);
     aspect-ratio: 2 / 1;
-    background: radial-gradient(ellipse at center, var(--color-brand-glow), transparent 70%);
-    filter: blur(120px);
+    background: radial-gradient(
+      ellipse at center top,
+      var(--section-accent-glow, var(--color-brand-glow)),
+      transparent 70%
+    );
+    filter: blur(180px);
+    opacity: 0.6;
     pointer-events: none;
     z-index: -1;
   }
@@ -357,16 +386,16 @@
 }
 
 @keyframes sock-swing-left {
-  0%, 100% { transform: translateX(-50%) rotate(-4deg); }
-  50%      { transform: translateX(-50%) rotate(-28deg); }
+  0%, 100% { transform: rotate(4deg); }
+  50%      { transform: rotate(-4deg); }
 }
 
 @keyframes sock-swing-right {
-  0%, 100% { transform: translateX(-50%) rotate(4deg); }
-  50%      { transform: translateX(-50%) rotate(28deg); }
+  0%, 100% { transform: rotate(-4deg); }
+  50%      { transform: rotate(4deg); }
 }
 
 /* Named helpers that attach keyframes to class selectors */
 .anim-nudge-right      { animation: nudge-right 2s ease-in-out infinite; }
-.anim-sock-swing-left  { animation: sock-swing-left 4.8s ease-in-out infinite; transform-origin: 50% 0%; }
-.anim-sock-swing-right { animation: sock-swing-right 4.8s ease-in-out infinite; transform-origin: 50% 0%; }
+.anim-sock-swing-left  { animation: sock-swing-left 5s ease-in-out infinite; transform-origin: 70% 0%; }
+.anim-sock-swing-right { animation: sock-swing-right 6s ease-in-out infinite; transform-origin: 70% 0%; }

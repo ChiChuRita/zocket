@@ -39,13 +39,14 @@ room.state.subscribe((s) => {
 });`;
 ---
 
-<section class="relative flex flex-col gap-10 xl:gap-14">
-  <header class="relative grid gap-10 xl:grid-cols-[minmax(0,1.1fr)_minmax(280px,420px)] xl:items-center xl:gap-12">
+<section class="relative flex flex-col gap-10 xl:gap-14" data-accent="brand">
+  <div class="section-glow" aria-hidden="true"></div>
+  <header class="relative grid gap-10 xl:grid-cols-[minmax(0,1.1fr)_minmax(280px,420px)] xl:items-start xl:gap-12">
     <div class="stagger flex flex-col gap-5">
       <h1>
         Serverless<br />
         realtime backends,
-        <span class="shimmer-text tracking-[-0.045em] block">fully typed.</span>
+        <span class="shimmer-text tracking-[-0.045em] block leading-[1.35] pb-3">fully typed.</span>
       </h1>
 
       <p class="max-w-xl text-base leading-relaxed text-fg-muted xl:text-[1.0625rem]">
@@ -64,18 +65,18 @@ room.state.subscribe((s) => {
       </div>
     </div>
 
-    <div class="hero-socks relative mx-auto hidden w-full max-w-[420px] aspect-square items-center justify-center xl:flex">
-      <img
-        src="/sock1.svg"
-        alt=""
-        aria-hidden="true"
-        class="anim-sock-swing-left absolute left-1/2 top-[18%] w-[44%] -translate-x-1/2 drop-shadow-[0_22px_40px_rgba(0,0,0,0.35)] z-[2] will-change-transform"
-      />
+    <div class="hero-socks relative mx-auto hidden h-[400px] w-[400px] xl:flex">
       <img
         src="/sock2.svg"
-        alt=""
+        alt="left sock"
         aria-hidden="true"
-        class="anim-sock-swing-right absolute left-1/2 top-[18%] w-[44%] -translate-x-1/2 drop-shadow-[0_22px_40px_rgba(0,0,0,0.35)] z-[1] will-change-transform"
+        class="anim-sock-swing-left h-[340px] w-[340px] object-cover drop-shadow-[0_22px_40px_rgba(0,0,0,0.35)] will-change-transform"
+      />
+      <img
+        src="/sock1.svg"
+        alt="right sock"
+        aria-hidden="true"
+        class="anim-sock-swing-right absolute left-[60px] top-[60px] h-[340px] w-[340px] object-cover drop-shadow-[0_22px_40px_rgba(0,0,0,0.35)] will-change-transform"
       />
     </div>
   </header>

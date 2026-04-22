@@ -6,7 +6,9 @@
     "baseUrl": ".",
     "paths": {
       "@zocket/core": ["../core/src/index.ts"],
-      "@zocket/core/*": ["../core/src/*"]
+      "@zocket/core/*": ["../core/src/*"],
+      "@zocket/client": ["../client/src/index.ts"],
+      "@zocket/client/*": ["../client/src/*"]
     },
     "jsx": "react-jsx",
     "declaration": true,

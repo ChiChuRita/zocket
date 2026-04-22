@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useRef,
+  useState,
   useEffect,
   useCallback,
   useSyncExternalStore,
@@ -12,49 +13,46 @@ import type {
   ClientApi,
   Unsubscribe,
 } from "@zocket/core";
+import type { ClientConnection, ConnectionStatus } from "@zocket/client";
 
 // ---------------------------------------------------------------------------
 // createZocketReact — factory that produces typed hooks + provider
 // ---------------------------------------------------------------------------
 
-type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "disconnected";
-
-type ClientWithExtras<TApp extends AppDef<any>> = ClientApi<TApp> & {
-  connection: {
-    ready: Promise<void>;
-    status: ConnectionStatus;
-    subscribe(cb: (status: ConnectionStatus) => void): () => void;
-    close(): void;
-  };
-  on(event: "status", cb: (status: ConnectionStatus) => void): () => void;
+type ZocketClient<TApp extends AppDef<any>> = ClientApi<TApp> & {
+  connection: ClientConnection;
+  on(event: "status", cb: (status: ConnectionStatus) => void): Unsubscribe;
 };
 
 /**
- * Structural shape accepted by hooks — any object with `.state`, `.on`,
- * `.$actorName`, `.$actorId` matching an ActorHandle.
+ * Structural shape accepted by hooks — any object with a ref-counted `meta`,
+ * event subscription via `on`, and a readable/subscribable `state`.
  * Avoids the need for phantom types or conditional-type unwrapping.
  */
-interface HandleLike<TState = unknown> {
-  on: (...args: any[]) => any;
+interface HandleLike<TState = unknown, TEvents extends Record<string, any> = Record<string, any>> {
+  on: <K extends keyof TEvents & string>(
+    event: K,
+    callback: (payload: TEvents[K]) => void,
+  ) => Unsubscribe;
   state: {
     subscribe: (listener: (state: TState) => void) => Unsubscribe;
     getSnapshot: () => TState | undefined;
   };
-  meta?: {
-    dispose?: () => void;
+  meta: {
+    name: string;
+    id: string;
+    dispose: () => void;
   };
-  $actorName: string;
-  $actorId: string;
 }
 
 export function createZocketReact<TApp extends AppDef<any>>() {
-  const ClientContext = createContext<ClientWithExtras<TApp> | null>(null);
+  const ClientContext = createContext<ZocketClient<TApp> | null>(null);
 
   function ZocketProvider({
     client,
     children,
   }: {
-    client: ClientWithExtras<TApp>;
+    client: ZocketClient<TApp>;
     children: ReactNode;
   }) {
     return (
@@ -62,7 +60,7 @@ export function createZocketReact<TApp extends AppDef<any>>() {
     );
   }
 
-  function useClient(): ClientWithExtras<TApp> {
+  function useClient(): ZocketClient<TApp> {
     const client = useContext(ClientContext);
     if (!client) {
       throw new Error("useClient must be used within <ZocketProvider>");
@@ -88,56 +86,59 @@ export function createZocketReact<TApp extends AppDef<any>>() {
     actorName: K,
     actorId: string,
   ): ReturnType<ClientApi<TApp>[K]> {
+    type Handle = ReturnType<ClientApi<TApp>[K]>;
     const client = useClient();
-    const ref = useRef<{ key: string; handle: ReturnType<ClientApi<TApp>[K]> } | null>(
-      null,
+    const key = `${String(actorName)}:${actorId}`;
+
+    const [handle, setHandle] = useState<Handle>(
+      () => (client as any)[actorName](actorId),
     );
 
-    const key = `${String(actorName)}:${actorId}`;
-    if (!ref.current || ref.current.key !== key) {
-      const factory = (client as any)[actorName] as (id: string) => any;
-      ref.current = { key, handle: factory(actorId) };
+    const prevKeyRef = useRef(key);
+    const prevClientRef = useRef(client);
+
+    if (prevKeyRef.current !== key || prevClientRef.current !== client) {
+      const next: Handle = (client as any)[actorName](actorId);
+      prevKeyRef.current = key;
+      prevClientRef.current = client;
+      setHandle(next);
     }
 
     useEffect(() => {
-      const current = ref.current;
       return () => {
-        current?.handle.meta?.dispose?.();
-        current?.handle.$dispose?.();
-        ref.current = null;
+        (handle as any).meta?.dispose?.();
       };
-    }, [key]);
+    }, [handle]);
 
-    return ref.current.handle;
+    return handle;
   }
 
   /**
    * Lifecycle wrapper for actor events — subscribes on mount, unsubscribes on unmount.
    *
-   * For **full type inference** on event names and payloads, use `room.on()` directly.
-   * `room.on("message", cb)` already infers the payload type from your actor definition.
-   * This hook exists purely for React lifecycle convenience (auto-cleanup).
+   * Event name and payload are inferred from the handle's `on` signature.
    *
    * ```tsx
-   * // Typed — payload is inferred:
    * useEvent(room, "message", (payload) => { playSound() })
-   *
-   * // Equivalent manual approach with full types:
-   * useEffect(() => room.on("message", (msg) => playSound()), [room])
    * ```
    */
-  function useEvent<TState>(
-    handle: HandleLike<TState>,
-    event: string,
-    callback: (payload: any) => void,
+  function useEvent<
+    H extends { on: (event: any, callback: any) => Unsubscribe },
+    E extends Parameters<H["on"]>[0],
+  >(
+    handle: H,
+    event: E,
+    callback: Parameters<H["on"] extends (e: E, cb: infer C) => any ? H["on"] : never>[1] extends infer Cb
+      ? Cb
+      : never,
   ): void {
     const cbRef = useRef(callback);
     cbRef.current = callback;
 
     useEffect(() => {
-      const unsub = handle.on(event, (payload: any) => {
-        cbRef.current(payload);
-      });
+      const unsub = handle.on(event, ((payload: unknown) => {
+        (cbRef.current as any)(payload);
+      }) as any);
       return unsub;
     }, [handle, event]);
   }
@@ -162,8 +163,9 @@ export function createZocketReact<TApp extends AppDef<any>>() {
 
     const cacheRef = useRef<{
       state: unknown;
+      selector: ((state: TState) => TSelected) | undefined;
       selected: TSelected | undefined;
-    }>({ state: undefined, selected: undefined });
+    }>({ state: undefined, selector: undefined, selected: undefined });
 
     const subscribe = useCallback(
       (onStoreChange: () => void) => {
@@ -182,11 +184,13 @@ export function createZocketReact<TApp extends AppDef<any>>() {
       const sel = selectorRef.current;
       if (!sel) return rawState as TSelected;
 
-      if (rawState !== cacheRef.current.state) {
-        cacheRef.current.state = rawState;
-        cacheRef.current.selected = sel(rawState);
+      const cache = cacheRef.current;
+      if (rawState !== cache.state || sel !== cache.selector) {
+        cache.state = rawState;
+        cache.selector = sel;
+        cache.selected = sel(rawState);
       }
-      return cacheRef.current.selected;
+      return cache.selected;
     }, [handle]);
 
     return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);

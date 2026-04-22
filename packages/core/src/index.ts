@@ -13,6 +13,7 @@ export type {
   EventDefs,
   TypedEmitFn,
   EmitFn,
+  EmitBuilder,
   LifecycleContext,
   LifecycleHandler,
   ActorLifecycleContext,
@@ -29,4 +30,5 @@ export type {
   ActorHandleMeta,
   ActorHandle,
   ClientApi,
+  WelcomeMessage,
 } from "./types";

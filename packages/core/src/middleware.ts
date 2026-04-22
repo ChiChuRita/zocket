@@ -14,7 +14,7 @@ import type {
 /** Arguments passed to each middleware function */
 export interface MiddlewareArgs<TCtx> {
   ctx: TCtx;
-  connectionId: string;
+  clientId: string;
   userId: string | null;
   claims: Record<string, unknown>;
   scope?: Record<string, string>;
@@ -89,8 +89,8 @@ export class MiddlewareBuilder<TCtx extends Record<string, unknown>> {
  *
  * ```ts
  * const authed = middleware()
- *   .use(async ({ connectionId }) => {
- *     const user = await getUser(connectionId)
+ *   .use(async ({ clientId }) => {
+ *     const user = await getUser(clientId)
  *     if (!user) throw new Error('Unauthorized')
  *     return { userId: user.id }
  *   })

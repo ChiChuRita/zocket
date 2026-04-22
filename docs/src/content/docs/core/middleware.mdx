@@ -11,8 +11,8 @@ Middleware lets you run logic **before** every method handler on an actor. Use i
 import { middleware } from "@zocket/core";
 
 const authed = middleware()
-  .use(async ({ connectionId }) => {
-    const user = await getUser(connectionId);
+  .use(async ({ clientId }) => {
+    const user = await getUser(clientId);
     if (!user) throw new Error("Unauthorized");
     return { userId: user.id, role: user.role };
   });
@@ -24,8 +24,8 @@ Each `.use()` call receives the accumulated context and returns additional conte
 
 ```ts
 const admin = middleware()
-  .use(async ({ connectionId }) => {
-    const user = await getUser(connectionId);
+  .use(async ({ clientId }) => {
+    const user = await getUser(clientId);
     if (!user) throw new Error("Unauthorized");
     return { userId: user.id, role: user.role };
   })
@@ -68,7 +68,7 @@ Each middleware function receives:
 | Property       | Type     | Description                             |
 | :------------- | :------- | :-------------------------------------- |
 | `ctx`          | `TCtx`   | Accumulated context from prior middleware |
-| `connectionId` | `string` | Stable connection identifier             |
+| `clientId` | `string` | Opaque client identifier (stable for one WebSocket) |
 | `actor`        | `string` | Actor name being called                  |
 | `actorId`      | `string` | Actor instance ID                        |
 | `method`       | `string` | Method name being called                 |
@@ -78,8 +78,8 @@ Each middleware function receives:
 If middleware throws, the RPC call is rejected and the method handler never runs. The error message is sent back to the client as part of the `rpc:result`:
 
 ```ts
-.use(async ({ connectionId }) => {
-  const user = await verifyToken(connectionId);
+.use(async ({ clientId }) => {
+  const user = await verifyToken(clientId);
   if (!user) throw new Error("Unauthorized");
   return { user };
 });
@@ -101,8 +101,8 @@ try {
 import { middleware } from "@zocket/core";
 
 const withAuth = middleware()
-  .use(async ({ connectionId }) => {
-    const session = await verifySession(connectionId);
+  .use(async ({ clientId }) => {
+    const session = await verifySession(clientId);
     if (!session) throw new Error("Unauthorized");
     return { userId: session.userId };
   });

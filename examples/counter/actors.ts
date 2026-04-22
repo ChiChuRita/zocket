@@ -8,6 +8,17 @@ const counter = actor({
     lastUpdatedBy: z.string().nullable().default(null),
     updatedAt: z.number().nullable().default(null),
   }),
+
+  onConnect: ({ state, emit }) => {
+    state.viewers += 1;
+    emit("presence", { viewers: state.viewers }).broadcast();
+  },
+
+  onDisconnect: ({ state, emit }) => {
+    state.viewers = Math.max(0, state.viewers - 1);
+    emit("presence", { viewers: state.viewers }).broadcast();
+  },
+
   events: {
     changed: z.object({
       count: z.number(),
@@ -19,69 +30,61 @@ const counter = actor({
       viewers: z.number(),
     }),
   },
-  onConnect: ({ state, emit }) => {
-    state.viewers += 1;
-    emit("presence", { viewers: state.viewers });
-  },
-  onDisconnect: ({ state, emit }) => {
-    state.viewers = Math.max(0, state.viewers - 1);
-    emit("presence", { viewers: state.viewers });
-  },
   methods: {
     increment: {
-      handler: ({ state, connectionId, emit }) => {
+      handler: ({ state, clientId, emit }) => {
         state.count += 1;
-        state.lastUpdatedBy = connectionId;
+        state.lastUpdatedBy = clientId;
         state.updatedAt = Date.now();
         emit("changed", {
           count: state.count,
           delta: 1,
           action: "increment",
-          changedBy: connectionId,
-        });
+          changedBy: clientId,
+        }).broadcast();
         return state.count;
       },
     },
     decrement: {
-      handler: ({ state, connectionId, emit }) => {
+      handler: ({ state, clientId, emit }) => {
         state.count -= 1;
-        state.lastUpdatedBy = connectionId;
+        state.lastUpdatedBy = clientId;
         state.updatedAt = Date.now();
         emit("changed", {
           count: state.count,
           delta: -1,
           action: "decrement",
-          changedBy: connectionId,
-        });
+          changedBy: clientId,
+        }).broadcast();
         return state.count;
       },
     },
     reset: {
-      handler: ({ state, connectionId, emit }) => {
+      handler: ({ state, clientId, emit }) => {
         state.count = 0;
-        state.lastUpdatedBy = connectionId;
+        state.lastUpdatedBy = clientId;
         state.updatedAt = Date.now();
         emit("changed", {
           count: state.count,
           delta: 0,
           action: "reset",
-          changedBy: connectionId,
-        });
+          changedBy: clientId,
+        }).broadcast();
         return state.count;
       },
     },
     set: {
       input: z.object({ value: z.number() }),
-      handler: ({ state, input, connectionId, emit }) => {
+      handler: ({ state, input, clientId, emit }) => {
         state.count = input.value;
-        state.lastUpdatedBy = connectionId;
+        state.lastUpdatedBy = clientId;
         state.updatedAt = Date.now();
         emit("changed", {
           count: state.count,
           delta: 0,
           action: "set",
-          changedBy: connectionId,
-        });
+          changedBy: clientId,
+        }).broadcast();
         return state.count;
       },
     },

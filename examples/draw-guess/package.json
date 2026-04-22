@@ -1,0 +1,19 @@
+{
+  "name": "draw-guess-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:server": "bun --watch server.ts",
+    "start": "bun run server.ts",
+    "typecheck": "bunx tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@zocket/core": "workspace:*",
+    "@zocket/server": "workspace:*",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}

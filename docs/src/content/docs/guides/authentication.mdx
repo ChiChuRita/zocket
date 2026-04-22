@@ -15,9 +15,9 @@ Zocket uses middleware to enforce authentication before method handlers run.
 import { middleware } from "@zocket/core";
 
 const authed = middleware()
-  .use(async ({ connectionId }) => {
+  .use(async ({ clientId }) => {
     // Look up the session/user for this connection
-    const user = await getUserByConnection(connectionId);
+    const user = await getUserByConnection(clientId);
     if (!user) throw new Error("Unauthorized");
     return { userId: user.id, role: user.role };
   });
@@ -79,8 +79,8 @@ import { verify } from "jsonwebtoken";
 const connectionTokens = new Map<string, string>();
 
 const jwtAuth = middleware()
-  .use(async ({ connectionId }) => {
-    const token = connectionTokens.get(connectionId);
+  .use(async ({ clientId }) => {
+    const token = connectionTokens.get(clientId);
     if (!token) throw new Error("No token");
 
     try {

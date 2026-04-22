@@ -104,10 +104,10 @@ const ChatRoom = actor({
 
     sendMessage: {
       input: z.object({ text: z.string() }),
-      handler: ({ state, input, emit, connectionId }) => {
-        const message = { from: connectionId, text: input.text };
+      handler: ({ state, input, emit, clientId }) => {
+        const message = { from: clientId, text: input.text };
         state.messages.push(message);
-        emit("message", message);
+        emit("message", message).broadcast();
       },
     },
   },

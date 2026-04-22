@@ -43,7 +43,7 @@ const ChatRoom = actor({
       handler: async ({ state, emit, input }) => {
         const msg = { text: input.text, sentAt: Date.now() };
         state.messages.push(msg);
-        emit("message", msg);
+        emit("message", msg).broadcast();
         return msg;
       },
     },
@@ -339,8 +339,8 @@ describe("Zocket v2 E2E", () => {
             connections: z.array(z.string()).default([]),
           }),
           methods: {},
-          onConnect({ state, connectionId }) {
-            state.connections.push(connectionId);
+          onConnect({ state, clientId }) {
+            state.connections.push(clientId);
           },
         }),
       },
@@ -373,11 +373,11 @@ describe("Zocket v2 E2E", () => {
             connected: z.array(z.string()).default([]),
           }),
           methods: {},
-          onConnect({ state, connectionId }) {
-            state.connected.push(connectionId);
+          onConnect({ state, clientId }) {
+            state.connected.push(clientId);
           },
-          onDisconnect({ state, connectionId }) {
-            const idx = state.connected.indexOf(connectionId);
+          onDisconnect({ state, clientId }) {
+            const idx = state.connected.indexOf(clientId);
             if (idx !== -1) state.connected.splice(idx, 1);
           },
         }),
@@ -424,13 +424,13 @@ describe("Zocket v2 E2E", () => {
           methods: {
             join: {
               input: z.object({ name: z.string() }),
-              handler({ state, input, connectionId }) {
-                state.players.push({ name: input.name, connId: connectionId });
+              handler({ state, input, clientId }) {
+                state.players.push({ name: input.name, connId: clientId });
               },
             },
           },
-          onDisconnect({ state, connectionId }) {
-            const idx = state.players.findIndex((p) => p.connId === connectionId);
+          onDisconnect({ state, clientId }) {
+            const idx = state.players.findIndex((p) => p.connId === clientId);
             if (idx !== -1) state.players.splice(idx, 1);
           },
         }),
@@ -465,15 +465,15 @@ describe("Zocket v2 E2E", () => {
     }
   });
 
-  test("connectionId is available inside method handlers", async () => {
+  test("clientId is available inside method handlers", async () => {
     const lifecycleApp = createApp({
       actors: {
         echo: actor({
           state: z.object({}).default({}),
           methods: {
             whoAmI: {
-              handler({ connectionId }) {
-                return connectionId;
+              handler({ clientId }) {
+                return clientId;
               },
             },
           },
@@ -493,6 +493,210 @@ describe("Zocket v2 E2E", () => {
       expect(connId2).toBe(connId);
     } finally {
       c.$close();
+      s.stop(true);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // clientId / targeted emit / clients tests
+  // -------------------------------------------------------------------------
+
+  test("client.clientId is populated after welcome and matches server-side clientId", async () => {
+    const lifecycleApp = createApp({
+      actors: {
+        echo: actor({
+          state: z.object({}).default({}),
+          methods: {
+            whoAmI: {
+              handler({ clientId }) {
+                return clientId;
+              },
+            },
+          },
+        }),
+      },
+    });
+
+    const s = serve(lifecycleApp, { port: 0 });
+    const c = createClient<typeof lifecycleApp>({ url: `ws://127.0.0.1:${s.port}` });
+    try {
+      await c.$ready;
+      await waitFor(() => c.clientId !== null);
+
+      const serverSeen = await c.echo("inst-welcome").whoAmI();
+      expect(c.clientId).toBe(serverSeen);
+      expect(c.connection.clientId).toBe(serverSeen);
+    } finally {
+      c.$close();
+      s.stop(true);
+    }
+  });
+
+  test("emit().to(clientId) delivers only to that client", async () => {
+    const targetedApp = createApp({
+      actors: {
+        room: actor({
+          state: z.object({}).default({}),
+          events: { whisper: z.object({ text: z.string() }) },
+          methods: {
+            whisper: {
+              input: z.object({ target: z.string(), text: z.string() }),
+              handler({ emit, input }) {
+                emit("whisper", { text: input.text }).to(input.target);
+              },
+            },
+          },
+        }),
+      },
+    });
+
+    const s = serve(targetedApp, { port: 0 });
+    const alice = createClient<typeof targetedApp>({ url: `ws://127.0.0.1:${s.port}` });
+    const bob = createClient<typeof targetedApp>({ url: `ws://127.0.0.1:${s.port}` });
+    try {
+      await alice.$ready;
+      await bob.$ready;
+      await waitFor(() => alice.clientId !== null && bob.clientId !== null);
+
+      const aliceReceived: string[] = [];
+      const bobReceived: string[] = [];
+      alice.room("r").on("whisper", (e) => aliceReceived.push(e.text));
+      bob.room("r").on("whisper", (e) => bobReceived.push(e.text));
+
+      // Give event:sub a moment to register on the server.
+      await new Promise((r) => setTimeout(r, 30));
+
+      await alice.room("r").whisper({ target: bob.clientId!, text: "psst" });
+
+      await waitFor(() => bobReceived.length === 1);
+      await new Promise((r) => setTimeout(r, 30));
+
+      expect(bobReceived).toEqual(["psst"]);
+      expect(aliceReceived).toEqual([]);
+    } finally {
+      alice.$close();
+      bob.$close();
+      s.stop(true);
+    }
+  });
+
+  test("emit().except(clientId) skips the excluded client", async () => {
+    const exceptApp = createApp({
+      actors: {
+        room: actor({
+          state: z.object({}).default({}),
+          events: { shout: z.object({ text: z.string() }) },
+          methods: {
+            shout: {
+              input: z.object({ text: z.string() }),
+              handler({ emit, clientId, input }) {
+                emit("shout", { text: input.text }).except(clientId);
+              },
+            },
+          },
+        }),
+      },
+    });
+
+    const s = serve(exceptApp, { port: 0 });
+    const alice = createClient<typeof exceptApp>({ url: `ws://127.0.0.1:${s.port}` });
+    const bob = createClient<typeof exceptApp>({ url: `ws://127.0.0.1:${s.port}` });
+    try {
+      await alice.$ready;
+      await bob.$ready;
+      await waitFor(() => alice.clientId !== null && bob.clientId !== null);
+
+      const aliceReceived: string[] = [];
+      const bobReceived: string[] = [];
+      alice.room("r").on("shout", (e) => aliceReceived.push(e.text));
+      bob.room("r").on("shout", (e) => bobReceived.push(e.text));
+
+      await new Promise((r) => setTimeout(r, 30));
+
+      await alice.room("r").shout({ text: "oyez" });
+
+      await waitFor(() => bobReceived.length === 1);
+      await new Promise((r) => setTimeout(r, 30));
+
+      expect(bobReceived).toEqual(["oyez"]);
+      expect(aliceReceived).toEqual([]);
+    } finally {
+      alice.$close();
+      bob.$close();
+      s.stop(true);
+    }
+  });
+
+  test("emit() without a terminal is silently dropped", async () => {
+    const droppedApp = createApp({
+      actors: {
+        room: actor({
+          state: z.object({}).default({}),
+          events: { ghost: z.object({ text: z.string() }) },
+          methods: {
+            ghost: {
+              input: z.object({ text: z.string() }),
+              handler({ emit, input }) {
+                // No .broadcast(), .to(), or .except(). Should never fire.
+                emit("ghost", { text: input.text });
+              },
+            },
+          },
+        }),
+      },
+    });
+
+    const s = serve(droppedApp, { port: 0 });
+    const c = createClient<typeof droppedApp>({ url: `ws://127.0.0.1:${s.port}` });
+    try {
+      await c.$ready;
+      const received: string[] = [];
+      c.room("r").on("ghost", (e) => received.push(e.text));
+      await new Promise((r) => setTimeout(r, 30));
+
+      await c.room("r").ghost({ text: "boo" });
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(received).toEqual([]);
+    } finally {
+      c.$close();
+      s.stop(true);
+    }
+  });
+
+  test("ctx.clients contains known clientIds on the actor instance", async () => {
+    const clientsApp = createApp({
+      actors: {
+        room: actor({
+          state: z.object({}).default({}),
+          methods: {
+            snapshot: {
+              handler({ clients }) {
+                return [...clients];
+              },
+            },
+          },
+        }),
+      },
+    });
+
+    const s = serve(clientsApp, { port: 0 });
+    const alice = createClient<typeof clientsApp>({ url: `ws://127.0.0.1:${s.port}` });
+    const bob = createClient<typeof clientsApp>({ url: `ws://127.0.0.1:${s.port}` });
+    try {
+      await alice.$ready;
+      await bob.$ready;
+      await waitFor(() => alice.clientId !== null && bob.clientId !== null);
+
+      // Both need to touch the same actor instance.
+      await alice.room("shared").snapshot();
+      const ids = await bob.room("shared").snapshot();
+
+      expect(ids).toContain(alice.clientId);
+      expect(ids).toContain(bob.clientId);
+    } finally {
+      alice.$close();
+      bob.$close();
       s.stop(true);
     }
   });

@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@zocket/client": ["../../../packages/client/src/index.ts"],
+      "@zocket/react": ["../../../packages/react/src/index.ts"],
+      "@zocket/core": ["../../../packages/core/src/index.ts"],
+      "@zocket/core/*": ["../../../packages/core/src/*"]
+    }
+  },
+  "include": ["src", "../actors.ts"]
+}

@@ -1,0 +1,48 @@
+---
+import type { FeatureIcon } from "../sections/features-data";
+
+interface Props {
+  icon: FeatureIcon;
+  size?: number;
+  class?: string;
+}
+
+const { icon, size = 16, class: className = "" } = Astro.props;
+---
+
+{icon === "memory" && (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class={className}>
+    <rect x="4" y="6" width="16" height="12" rx="2"></rect>
+    <path d="M8 6v-2M12 6v-2M16 6v-2M8 18v2M12 18v2M16 18v2"></path>
+    <path d="M8 10h2M8 14h2M14 10h2M14 14h2"></path>
+  </svg>
+)}
+{icon === "stream" && (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class={className}>
+    <path d="M3 7c3 0 3 4 6 4s3-4 6-4 3 4 6 4M3 17c3 0 3-4 6-4s3 4 6 4 3-4 6-4"></path>
+  </svg>
+)}
+{icon === "websocket" && (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class={className}>
+    <path d="M4 9h6l3 6h7M20 15h-6l-3-6H4"></path>
+  </svg>
+)}
+{icon === "workflow" && (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class={className}>
+    <rect x="3" y="3" width="6" height="6" rx="1"></rect>
+    <rect x="15" y="15" width="6" height="6" rx="1"></rect>
+    <path d="M9 6h6a3 3 0 013 3v6"></path>
+  </svg>
+)}
+{icon === "durable" && (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class={className}>
+    <path d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z"></path>
+    <path d="M9 12l2 2 4-4"></path>
+  </svg>
+)}
+{icon === "scale" && (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class={className}>
+    <path d="M3 18l6-6 4 4 8-8"></path>
+    <path d="M14 8h7v7"></path>
+  </svg>
+)}

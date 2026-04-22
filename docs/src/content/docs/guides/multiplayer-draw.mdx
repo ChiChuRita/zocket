@@ -39,7 +39,7 @@ export const DrawingRoom = actor({
       name: z.string(),
       score: z.number(),
       color: z.string(),
-      connectionId: z.string().default(""),
+      clientId: z.string().default(""),
     })).default([]),
     phase: z.enum(["lobby", "drawing", "roundEnd"]).default("lobby"),
     drawerId: z.string().default(""),
@@ -59,11 +59,11 @@ export const DrawingRoom = actor({
   methods: {
     join: {
       input: z.object({ name: z.string() }),
-      handler: ({ state, input, connectionId }) => {
+      handler: ({ state, input, clientId }) => {
         // Reconnect if player exists
         const existing = state.players.find((p) => p.name === input.name);
         if (existing) {
-          existing.connectionId = connectionId;
+          existing.clientId = clientId;
           return { playerId: existing.id, color: existing.color };
         }
         // New player
@@ -71,7 +71,7 @@ export const DrawingRoom = actor({
         const color = PLAYER_COLORS[state.players.length % PLAYER_COLORS.length];
         state.players.push({
           id: playerId, name: input.name,
-          score: 0, color, connectionId,
+          score: 0, color, clientId,
         });
         return { playerId, color };
       },
@@ -113,7 +113,7 @@ export const DrawingRoom = actor({
 
         if (correct) {
           player.score += 10;
-          emit("correctGuess", { name: player.name, word: state.word });
+          emit("correctGuess", { name: player.name, word: state.word }).broadcast();
           state.phase = "roundEnd";
         }
         return { correct };
@@ -125,8 +125,8 @@ export const DrawingRoom = actor({
     correctGuess: z.object({ name: z.string(), word: z.string() }),
   },
 
-  onDisconnect({ state, connectionId }) {
-    const idx = state.players.findIndex((p) => p.connectionId === connectionId);
+  onDisconnect({ state, clientId }) {
+    const idx = state.players.findIndex((p) => p.clientId === clientId);
     if (idx === -1) return;
     const wasDrawer = state.players[idx].id === state.drawerId;
     state.players.splice(idx, 1);

@@ -1,54 +1,9 @@
 ---
 title: Roadmap
-description: Upcoming features — targeted events, timers, cron, actor-to-actor calls, streaming, and AI SDK integration.
+description: Upcoming features — timers, cron, actor-to-actor calls, streaming, and AI SDK integration.
 ---
 
 Features that are designed and coming soon. The APIs shown here are stable — implementation is in progress.
-
-## Targeted Events
-
-Currently, `emit("event", payload)` broadcasts to all subscribers. Targeted events let you send to a specific client:
-
-```ts
-const GameRoom = actor({
-  state: z.object({
-    players: z.record(z.object({
-      hand: z.array(z.string()),
-      score: z.number(),
-    })).default({}),
-  }),
-
-  methods: {
-    dealCards: {
-      handler: ({ state, emit, connections }) => {
-        // Broadcast to everyone
-        emit("roundStarted", { round: 1 });
-
-        // Send each player their private hand
-        for (const id of connections.list()) {
-          const player = state.players[id];
-          if (player) {
-            emit.to(id, "yourHand", { cards: player.hand });
-          }
-        }
-      },
-    },
-  },
-
-  events: {
-    roundStarted: z.object({ round: z.number() }),
-    yourHand: z.object({ cards: z.array(z.string()) }),
-  },
-});
-```
-
-**`emit.to(connectionId, event, payload)`** — send to one specific connection.
-
-**`connections.list()`** — returns `string[]` of connected client IDs.
-
-State stays broadcast (all subscribers see the same patches). Private data goes through targeted events.
-
----
 
 ## Timers
 
@@ -116,8 +71,8 @@ const Presence = actor({
 
   methods: {
     heartbeat: {
-      handler: ({ state, connectionId }) => {
-        state.users[connectionId] = Date.now();
+      handler: ({ state, clientId }) => {
+        state.users[clientId] = Date.now();
       },
     },
     cleanup: {
@@ -388,9 +343,9 @@ const AgentRun = actor({
 
 | Feature | Type-safe? | Details |
 |---------|-----------|---------|
-| `emit("event", payload)` | Yes | Event names and payloads type-checked |
-| `emit.to(id, "event", payload)` | Yes | Same, routed to specific connection |
-| `connections.list()` | Yes | Returns `string[]` |
+| `emit("event", payload).broadcast()` | Yes | Event names and payloads type-checked |
+| `emit("event", payload).to(id)` | Yes | Same, routed to specific client(s) |
+| `ctx.clients` | Yes | `ReadonlySet<string>` of connected client IDs |
 | `timer.after(ms).method()` | Yes | Method names autocomplete, inputs type-checked |
 | `timer.every(ms).method()` | Yes | Same |
 | `timer.cancel(id)` | Yes | |

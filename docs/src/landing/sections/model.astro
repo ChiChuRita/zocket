@@ -1,0 +1,107 @@
+---
+import { createHighlighter } from "shiki";
+
+const highlighter = await createHighlighter({
+  themes: ["github-dark"],
+  langs: ["typescript"],
+});
+
+function hl(code: string): string {
+  return highlighter.codeToHtml(code.trim(), {
+    lang: "typescript",
+    theme: "github-dark",
+  });
+}
+
+const steps = [
+  {
+    label: "01 — Define",
+    title: "Actors own state.",
+    blurb:
+      "Describe state with Zod. Describe methods with typed inputs. No classes, no decorators, no codegen.",
+    html: hl(`const Room = actor({
+  state: z.object({
+    messages: z.array(z.string()).default([]),
+  }),
+  methods: {
+    send: {
+      input: z.string(),
+      handler: ({ state, input }) => {
+        state.messages.push(input);
+      },
+    },
+  },
+});`),
+  },
+  {
+    label: "02 — Call",
+    title: "Clients call methods.",
+    blurb:
+      "Full types flow from server to client. No REST, no OpenAPI, no tRPC boilerplate. Just import the app type.",
+    html: hl(`const room = client.room("general");
+
+await room.send("hello");
+// ^ typed. typos fail at compile time.`),
+  },
+  {
+    label: "03 — Subscribe",
+    title: "State streams back.",
+    blurb:
+      "You subscribe to state, not events. Immer patches flow over WebSocket. React hooks included.",
+    html: hl(`room.state.subscribe((s) => {
+  console.log(s.messages);
+});
+
+// or in React:
+const s = useActorState(room);`),
+  },
+];
+---
+
+<section class="relative flex flex-col gap-8" data-accent="emerald">
+  <div class="section-glow" aria-hidden="true"></div>
+  <header class="reveal flex max-w-3xl flex-col gap-3">
+    <h2>
+      Three primitives. <span class="text-accent-emerald">That's the API.</span>
+    </h2>
+    <p class="max-w-2xl text-base text-fg-muted md:text-lg">
+      Zocket exposes an actor model, not a socket library. You describe state, describe methods, and read state on the client. The runtime handles the rest.
+    </p>
+  </header>
+
+  <div class="reveal grid gap-5 md:grid-cols-3">
+    {steps.map((s) => (
+      <div class="frame flex flex-col gap-4 overflow-hidden p-5">
+        <div class="flex flex-col gap-1.5">
+          <span class="font-mono text-[11px] uppercase tracking-[0.2em] text-fg-faint">
+            {s.label}
+          </span>
+          <h3 class="text-lg font-semibold text-fg">{s.title}</h3>
+          <p class="text-sm leading-relaxed text-fg-muted">{s.blurb}</p>
+        </div>
+        <div
+          class="model-code -mx-5 -mb-5 border-t border-border/60 bg-black/40 px-5 py-4 text-[12px] leading-relaxed"
+          set:html={s.html}
+        />
+      </div>
+    ))}
+  </div>
+</section>
+
+<style is:global>
+  .model-code {
+    font-family: var(--font-mono);
+    font-variant-ligatures: none;
+    tab-size: 2;
+    overflow-x: auto;
+  }
+  .model-code pre,
+  .model-code code {
+    background: transparent !important;
+    margin: 0;
+    padding: 0;
+  }
+  .model-code pre {
+    overflow: visible !important;
+  }
+</style>

@@ -174,8 +174,8 @@ And another convention for timeouts.
 Zocket gets the return type from the method handler itself:
 
 ```ts
-handler: ({ state, input, connectionId }) => {
-  const msg = { id: crypto.randomUUID(), from: connectionId, text: input.text };
+handler: ({ state, input, clientId }) => {
+  const msg = { id: crypto.randomUUID(), from: clientId, text: input.text };
   state.messages.push(msg);
   return { messageId: msg.id };
 }
@@ -267,15 +267,15 @@ const ChatRoom = actor({
   methods: {
     sendMessage: {
       input: z.object({ text: z.string() }),
-      handler: ({ state, input, connectionId, emit }) => {
+      handler: ({ state, input, clientId, emit }) => {
         const msg = {
           id: crypto.randomUUID(),
-          from: connectionId,
+          from: clientId,
           text: input.text,
         };
 
         state.messages.push(msg);
-        emit("newMessage", msg);
+        emit("newMessage", msg).broadcast();
 
         return { messageId: msg.id };
       },
@@ -392,8 +392,8 @@ room.on("message", () => {}); // type error
 And on the server:
 
 ```ts
-emit("newMessage", msg); // typed and validated
-emit("message", msg); // type error
+emit("newMessage", msg).broadcast(); // typed and validated
+emit("message", msg).broadcast(); // type error on event name
 ```
 
 ### State shape

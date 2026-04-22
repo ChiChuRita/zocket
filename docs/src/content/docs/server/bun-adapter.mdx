@@ -80,9 +80,10 @@ Under the hood:
 3. The adapter implements the `Connection` interface (`send()` + `id`)
 4. Messages are routed through the handler to the `ActorManager`
 
-## Connection IDs
+## Client IDs
 
 Each connection gets a unique ID like `bun_1_m3abc`. This ID is:
-- Passed to method handlers as `connectionId`
+- Passed to method handlers as `clientId`
 - Used by lifecycle hooks (`onConnect`, `onDisconnect`)
 - Stable for the lifetime of a WebSocket connection
+- Sent to the client as a `welcome` message so `client.clientId` can be read in the browser

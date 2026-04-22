@@ -1,6 +1,6 @@
 import type { AppDef } from "@zocket/core";
 import type { ClientMessage } from "@zocket/core/types";
-import { parseMessage, rpcResult, MSG } from "@zocket/core/protocol";
+import { parseMessage, rpcResult, welcome, MSG } from "@zocket/core/protocol";
 import { ActorManager, type Connection } from "./runtime.js";
 
 // ---------------------------------------------------------------------------
@@ -21,8 +21,12 @@ export function createHandlers(app: AppDef<any>): HandlerCallbacks {
   return {
     manager,
 
-    onConnection(_conn: Connection) {
-      // no-op for now; subscriptions happen via messages
+    onConnection(conn: Connection) {
+      try {
+        conn.send(JSON.stringify(welcome(conn.id)));
+      } catch {
+        // Connection may have closed between open and first send.
+      }
     },
 
     async onMessage(conn: Connection, raw: string) {

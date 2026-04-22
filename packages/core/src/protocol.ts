@@ -8,6 +8,7 @@ import type {
   StateUnsubMessage,
   StateSnapshotMessage,
   StatePatchMessage,
+  WelcomeMessage,
   JsonPatchOp,
   ClientMessage,
   ServerMessage,
@@ -27,6 +28,7 @@ export const MSG = {
   STATE_UNSUB: "state:unsub",
   STATE_SNAPSHOT: "state:snapshot",
   STATE_PATCH: "state:patch",
+  WELCOME: "welcome",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -95,6 +97,10 @@ export function statePatch(
   patches: JsonPatchOp[],
 ): StatePatchMessage {
   return { type: MSG.STATE_PATCH, actor, actorId, patches };
+}
+
+export function welcome(clientId: string): WelcomeMessage {
+  return { type: MSG.WELCOME, clientId };
 }
 
 // ---------------------------------------------------------------------------

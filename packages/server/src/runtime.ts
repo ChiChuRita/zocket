@@ -2,10 +2,51 @@ import { enablePatches, setAutoFreeze, createDraft, finishDraft, type Patch } fr
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type {
   ActorDef,
+  EmitBuilder,
   InferSchema,
   JsonPatchOp,
 } from "@zocket/core/types";
 import { event as eventMsg, statePatch, stateSnapshot } from "@zocket/core/protocol";
+
+// ---------------------------------------------------------------------------
+// Emit filter — describes which subscribers should receive a pending event
+// ---------------------------------------------------------------------------
+
+type EmitFilter =
+  | { kind: "all" }
+  | { kind: "to"; ids: Set<string> }
+  | { kind: "except"; ids: Set<string> };
+
+interface PendingEvent {
+  event: string;
+  payload: unknown;
+  filter: EmitFilter;
+}
+
+function toIdSet(id: string | readonly string[]): Set<string> {
+  return new Set(typeof id === "string" ? [id] : id);
+}
+
+/**
+ * Create an `emit(event, payload)` function that pushes pending events into
+ * `pending` when a terminal (`.broadcast()` / `.to()` / `.except()`) is called.
+ * Builders that are never terminated are silent no-ops.
+ */
+function makeEmit(pending: PendingEvent[]): (event: string, payload: unknown) => EmitBuilder {
+  return (event: string, payload: unknown): EmitBuilder => {
+    let fired = false;
+    const fire = (filter: EmitFilter) => {
+      if (fired) return;
+      fired = true;
+      pending.push({ event, payload, filter });
+    };
+    return {
+      broadcast: () => fire({ kind: "all" }),
+      to: (id) => fire({ kind: "to", ids: toIdSet(id) }),
+      except: (id) => fire({ kind: "except", ids: toIdSet(id) }),
+    };
+  };
+}
 
 enablePatches();
 setAutoFreeze(false);
@@ -167,16 +208,15 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
 
     this.queue.push({
       run: async () => {
-        const pendingEvents: { event: string; payload: unknown }[] = [];
-        const emit = (eventName: string, payload: unknown) => {
-          pendingEvents.push({ event: eventName, payload });
-        };
+        const pendingEvents: PendingEvent[] = [];
+        const emit = makeEmit(pendingEvents);
 
         const draft = createDraft(this.state as any);
 
         let result: unknown = handler({
           state: draft,
-          connectionId: conn.id,
+          clientId: conn.id,
+          clients: new Set(this.knownConnections.keys()),
           userId: conn.userId ?? null,
           claims: conn.claims ?? {},
           scope: conn.scope,
@@ -197,19 +237,35 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
           for (const c of this.stateSubscribers) c.send(raw);
         }
 
-        for (const pe of pendingEvents) {
-          if (this.def.config.events?.[pe.event]) {
-            const schema = this.def.config.events[pe.event] as StandardSchemaV1;
-            const validation = await schema["~standard"].validate(pe.payload);
-            if (validation.issues) continue;
-            const msg = eventMsg(this.actorName, this.actorId, pe.event, validation.value);
-            const raw = JSON.stringify(msg);
-            for (const c of this.eventSubscribers) c.send(raw);
-          }
-        }
+        await this.dispatchPendingEvents(pendingEvents);
       },
     });
     this.drain();
+  }
+
+  /**
+   * Dispatch pending events to subscribers, applying per-event target filters.
+   * Filters only narrow within the current event subscriber set — clients that
+   * have not subscribed never receive events regardless of `.to()`.
+   */
+  private async dispatchPendingEvents(pendingEvents: PendingEvent[]): Promise<void> {
+    for (const pe of pendingEvents) {
+      const schema = this.def.config.events?.[pe.event] as StandardSchemaV1 | undefined;
+      if (!schema) continue;
+
+      const validation = await schema["~standard"].validate(pe.payload);
+      if (validation.issues) continue;
+
+      const raw = JSON.stringify(
+        eventMsg(this.actorName, this.actorId, pe.event, validation.value),
+      );
+
+      for (const c of this.eventSubscribers) {
+        if (pe.filter.kind === "to" && !pe.filter.ids.has(c.id)) continue;
+        if (pe.filter.kind === "except" && pe.filter.ids.has(c.id)) continue;
+        c.send(raw);
+      }
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -268,7 +324,7 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
     for (const mw of middlewares) {
       const added = await mw({
         ctx,
-        connectionId: conn.id,
+        clientId: conn.id,
         userId: conn.userId ?? null,
         claims: conn.claims ?? {},
         scope: conn.scope,
@@ -281,10 +337,8 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
       }
     }
 
-    const pendingEvents: { event: string; payload: unknown }[] = [];
-    const emit = (eventName: string, payload: unknown) => {
-      pendingEvents.push({ event: eventName, payload });
-    };
+    const pendingEvents: PendingEvent[] = [];
+    const emit = makeEmit(pendingEvents);
 
     // Use createDraft/finishDraft instead of produce so we can await async
     // handlers and clone the return value BEFORE the draft is finalized/revoked.
@@ -294,7 +348,8 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
       state: draft,
       input: validatedInput,
       emit,
-      connectionId: conn.id,
+      clientId: conn.id,
+      clients: new Set(this.knownConnections.keys()),
       ctx,
     });
 
@@ -327,19 +382,7 @@ export class ActorInstance<TDef extends ActorDef<any, any, any> = ActorDef> {
       }
     }
 
-    for (const pe of pendingEvents) {
-      if (this.def.config.events?.[pe.event]) {
-        const schema = this.def.config.events[pe.event] as StandardSchemaV1;
-        const validation = await schema["~standard"].validate(pe.payload);
-        if (validation.issues) continue;
-
-        const msg = eventMsg(this.actorName, this.actorId, pe.event, validation.value);
-        const raw = JSON.stringify(msg);
-        for (const conn of this.eventSubscribers) {
-          conn.send(raw);
-        }
-      }
-    }
+    await this.dispatchPendingEvents(pendingEvents);
 
     return returnValue;
   }

@@ -83,13 +83,14 @@ methods: {
 
 Every handler receives a context object:
 
-| Property       | Type                  | Description                                    |
-| :------------- | :-------------------- | :--------------------------------------------- |
-| `state`        | `TState` (Immer draft)| Mutable state — changes are tracked as patches  |
-| `input`        | `InferSchema<TInput>` | Validated input (or `undefined` if no schema)   |
-| `emit`         | `TypedEmitFn`         | Emit typed events to subscribers                |
-| `connectionId` | `string`              | Opaque ID for the calling connection            |
-| `ctx`          | `TCtx`                | Middleware context (see [Middleware](/core/middleware/)) |
+| Property   | Type                    | Description                                              |
+| :--------- | :---------------------- | :------------------------------------------------------- |
+| `state`    | `TState` (Immer draft)  | Mutable state — changes are tracked as patches            |
+| `input`    | `InferSchema<TInput>`   | Validated input (or `undefined` if no schema)             |
+| `emit`     | `TypedEmitFn`           | Emit typed events (see [Emitting Events](#emitting-events)) |
+| `clientId` | `string`                | Opaque ID for the calling client                          |
+| `clients`  | `ReadonlySet<string>`   | Snapshot of client ids currently known to this instance   |
+| `ctx`      | `TCtx`                  | Middleware context (see [Middleware](/core/middleware/))  |
 
 ### Return Values
 
@@ -111,7 +112,17 @@ All method calls on a single actor instance are **queued and executed sequential
 
 ## Events
 
-Events are typed messages broadcast to all connections subscribed to an actor instance:
+Events are typed messages dispatched to clients subscribed to an actor instance. `emit(event, payload)` returns a builder — you must call a terminal method to actually send:
+
+```ts
+emit("newMessage", msg).broadcast();        // every subscriber
+emit("newMessage", msg).to(clientId);       // one client (or string[])
+emit("newMessage", msg).except(clientId);   // all subscribers except the listed id(s)
+```
+
+Builders without a terminal call are a no-op. `.to()` and `.except()` only filter within already-subscribed clients — they don't deliver to clients who haven't subscribed to events.
+
+### Emitting Events
 
 ```ts
 const ChatRoom = actor({
@@ -122,10 +133,10 @@ const ChatRoom = actor({
   methods: {
     send: {
       input: z.object({ text: z.string() }),
-      handler: ({ state, input, emit, connectionId }) => {
-        const msg = { text: input.text, from: connectionId };
+      handler: ({ state, input, emit, clientId }) => {
+        const msg = { text: input.text, from: clientId };
         state.messages.push(msg);
-        emit("newMessage", msg);
+        emit("newMessage", msg).broadcast();
       },
     },
   },
@@ -176,18 +187,18 @@ const Room = actor({
 
   methods: { /* ... */ },
 
-  onConnect({ state, connectionId }) {
-    state.online.push(connectionId);
+  onConnect({ state, clientId }) {
+    state.online.push(clientId);
   },
 
-  onDisconnect({ state, connectionId }) {
-    const idx = state.online.indexOf(connectionId);
+  onDisconnect({ state, clientId }) {
+    const idx = state.online.indexOf(clientId);
     if (idx !== -1) state.online.splice(idx, 1);
   },
 });
 ```
 
-Connection lifecycle hooks receive a `LifecycleContext` with `state` (Immer draft), `connectionId`, and `emit`. They are queued alongside method calls to preserve ordering.
+Connection lifecycle hooks receive a `LifecycleContext` with `state` (Immer draft), `clientId`, `clients`, and `emit`. They are queued alongside method calls to preserve ordering.
 
 Note: middleware `ctx` is **not** available in lifecycle hooks — only in method handlers.
 
@@ -212,7 +223,7 @@ const DrawingRoom = actor({
       name: z.string(),
       score: z.number(),
       color: z.string(),
-      connectionId: z.string().default(""),
+      clientId: z.string().default(""),
     })).default([]),
     phase: z.enum(["lobby", "drawing", "roundEnd"]).default("lobby"),
     drawerId: z.string().default(""),
@@ -225,15 +236,15 @@ const DrawingRoom = actor({
   methods: {
     join: {
       input: z.object({ name: z.string() }),
-      handler: ({ state, input, connectionId }) => {
+      handler: ({ state, input, clientId }) => {
         const existing = state.players.find((p) => p.name === input.name);
         if (existing) {
-          existing.connectionId = connectionId;
+          existing.clientId = clientId;
           return { playerId: existing.id, color: existing.color };
         }
         const id = Math.random().toString(36).slice(2, 10);
         const color = ["#ef4444", "#3b82f6", "#22c55e"][state.players.length % 3];
-        state.players.push({ id, name: input.name, score: 0, color, connectionId });
+        state.players.push({ id, name: input.name, score: 0, color, clientId });
         return { playerId: id, color };
       },
     },
@@ -250,7 +261,7 @@ const DrawingRoom = actor({
       handler: ({ state, input, emit }) => {
         const correct = input.text.toLowerCase() === state.word.toLowerCase();
         if (correct) {
-          emit("correctGuess", { name: input.playerId, word: state.word });
+          emit("correctGuess", { name: input.playerId, word: state.word }).broadcast();
           state.phase = "roundEnd";
         }
         return { correct };
@@ -262,8 +273,8 @@ const DrawingRoom = actor({
     correctGuess: z.object({ name: z.string(), word: z.string() }),
   },
 
-  onDisconnect({ state, connectionId }) {
-    const idx = state.players.findIndex((p) => p.connectionId === connectionId);
+  onDisconnect({ state, clientId }) {
+    const idx = state.players.findIndex((p) => p.clientId === clientId);
     if (idx !== -1) state.players.splice(idx, 1);
   },
 });

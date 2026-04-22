@@ -246,6 +246,127 @@ flowchart TB
   </section>
 
   <section>
+    <h2>Multi-region stateless architecture</h2>
+    <p>
+      Zocket deploys the same stateless building blocks into every region. Gateways, runtimes, and local
+      JetStream replicas sit inside each region; a <strong>NATS supercluster</strong> (gateway connections
+      + JetStream mirrors) glues regions together so a subject published anywhere reaches the durable
+      consumer that owns it, wherever that runtime happens to live. External systems publish into the same
+      subject hierarchy and light up as regular inbound traffic.
+    </p>
+    <div class="mermaid">
+flowchart LR
+    subgraph RegionA["Region A (e.g. eu-west-1)"]
+        direction LR
+        subgraph CA["WebSocket Clients"]
+            CA1["Client"]
+            CA2["Client"]
+            CA3["Client"]
+        end
+        subgraph GA["Gateway Fleet — @zocket/gateway"]
+            GA1["Gateway 1"]
+            GA2["Gateway 2"]
+            GA3["…"]
+        end
+        subgraph NA["Regional NATS + JetStream (R=3)"]
+            NA_IN[("INBOUND<br/>workqueue · ACK")]
+            NA_OUT[("OUTBOUND<br/>session replay")]
+            NA_CORE["Core NATS<br/>session.*"]
+        end
+        subgraph RA["Runner Hosts"]
+            RA_T1["Tenant X microVM<br/>(Firecracker)<br/>@zocket/runtime"]
+            RA_T2["Tenant Y microVM<br/>(Firecracker)<br/>@zocket/runtime"]
+        end
+        CA1 & CA2 & CA3 <--> GA1 & GA2 & GA3
+        GA1 & GA2 & GA3 -- "publish" --> NA_IN
+        NA_OUT -- "ephemeral consumer" --> GA1 & GA2 & GA3
+        GA1 & GA2 & GA3 -. "session.connected/disconnected" .-> NA_CORE
+        NA_IN -- "durable consumer" --> RA_T1 & RA_T2
+        RA_T1 & RA_T2 -- "VirtualConnection.send()" --> NA_OUT
+        NA_CORE -. "cleanup" .-> RA_T1 & RA_T2
+    end
+
+    subgraph RegionB["Region B (e.g. us-east-1)"]
+        direction LR
+        subgraph CB["WebSocket Clients"]
+            CB1["Client"]
+            CB2["Client"]
+            CB3["Client"]
+        end
+        subgraph GB["Gateway Fleet — @zocket/gateway"]
+            GB1["Gateway 1"]
+            GB2["Gateway 2"]
+            GB3["…"]
+        end
+        subgraph NB["Regional NATS + JetStream (R=3)"]
+            NB_IN[("INBOUND<br/>workqueue · ACK")]
+            NB_OUT[("OUTBOUND<br/>session replay")]
+            NB_CORE["Core NATS<br/>session.*"]
+        end
+        subgraph RB["Runner Hosts"]
+            RB_T1["Tenant Y microVM<br/>(Firecracker)<br/>@zocket/runtime"]
+            RB_T2["Tenant Z microVM<br/>(Firecracker)<br/>@zocket/runtime"]
+        end
+        CB1 & CB2 & CB3 <--> GB1 & GB2 & GB3
+        GB1 & GB2 & GB3 -- "publish" --> NB_IN
+        NB_OUT -- "ephemeral consumer" --> GB1 & GB2 & GB3
+        GB1 & GB2 & GB3 -. "session.connected/disconnected" .-> NB_CORE
+        NB_IN -- "durable consumer" --> RB_T1 & RB_T2
+        RB_T1 & RB_T2 -- "VirtualConnection.send()" --> NB_OUT
+        NB_CORE -. "cleanup" .-> RB_T1 & RB_T2
+    end
+
+    SUPER{{"NATS Supercluster<br/>gateway connections +<br/>JetStream stream mirrors"}}
+    EXT["External System<br/>(webhooks, internal services)"]
+
+    NA_IN <-. "subject interest<br/>+ mirrored streams" .-> SUPER
+    NA_OUT <-. "subject interest<br/>+ mirrored streams" .-> SUPER
+    NA_CORE <-. "session.*" .-> SUPER
+    NB_IN <-. "subject interest<br/>+ mirrored streams" .-> SUPER
+    NB_OUT <-. "subject interest<br/>+ mirrored streams" .-> SUPER
+    NB_CORE <-. "session.*" .-> SUPER
+
+    EXT -- "publish inbound.{ws}.{proj}.{type}.{id}" --> SUPER
+
+    classDef client fill:#e3f2fd,stroke:#1976d2
+    classDef gw fill:#fff3e0,stroke:#ef6c00
+    classDef nats fill:#f3e5f5,stroke:#6a1b9a
+    classDef rt fill:#e8f5e9,stroke:#2e7d32
+    classDef super fill:#ede7f6,stroke:#4527a0,stroke-width:2px
+    classDef ext fill:#fafafa,stroke:#616161
+
+    class CA1,CA2,CA3,CB1,CB2,CB3 client
+    class GA1,GA2,GA3,GB1,GB2,GB3 gw
+    class NA_IN,NA_OUT,NA_CORE,NB_IN,NB_OUT,NB_CORE nats
+    class RA_T1,RA_T2,RB_T1,RB_T2 rt
+    class SUPER super
+    class EXT ext
+    </div>
+    <h3>Why this works</h3>
+    <ul>
+      <li>
+        <strong>Clients stay local.</strong> A client terminates on the nearest gateway region; only the
+        subject-level routing crosses regions, keeping WebSocket latency low.
+      </li>
+      <li>
+        <strong>Actors pin to one region.</strong> Each tenant's runtime has a single durable consumer per
+        actor type, so ordering and Immer state stay consistent even if the producing client is in another
+        region. The supercluster routes inbound messages to that consumer.
+      </li>
+      <li>
+        <strong>Outbound replay survives region hops.</strong> Mirrored OUTBOUND streams let a gateway in any
+        region drain the session backlog after a reconnect — clients can even fail over regions without
+        losing in-flight server messages.
+      </li>
+      <li>
+        <strong>External systems are first-class publishers.</strong> Webhooks, cron jobs, and internal
+        services publish straight onto <code>inbound.*</code> through the supercluster; actors don't know or
+        care whether the sender was a WebSocket client or a backend.
+      </li>
+    </ul>
+  </section>
+
+  <section>
     <h2>Reliability flows</h2>
     <div class="mermaid">
 sequenceDiagram

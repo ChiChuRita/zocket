@@ -73,8 +73,8 @@ io.on("connection", (socket) => {
     },
   },
 
-  onDisconnect({ state, connectionId }) {
-    const i = state.online.indexOf(connectionId);
+  onDisconnect({ state, clientId }) {
+    const i = state.online.indexOf(clientId);
     if (i !== -1) state.online.splice(i, 1);
   },
 });`),
@@ -128,13 +128,13 @@ const Workspace = actor({
   methods: {
     updateCursor: {
       input: z.object({ x: z.number(), y: z.number(), name: z.string() }),
-      handler: ({ state, input, connectionId }) => {
-        state.cursors[connectionId] = input;
+      handler: ({ state, input, clientId }) => {
+        state.cursors[clientId] = input;
       },
     },
   },
-  onDisconnect({ state, connectionId }) {
-    delete state.cursors[connectionId];
+  onDisconnect({ state, clientId }) {
+    delete state.cursors[clientId];
   },
 });
 

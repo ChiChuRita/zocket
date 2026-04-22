@@ -7,6 +7,7 @@ import type {
   EventMessage,
   StateSnapshotMessage,
   StatePatchMessage,
+  WelcomeMessage,
 } from "@zocket/core/types";
 import { parseMessage, MSG } from "@zocket/core/protocol";
 import { ActorHandleImpl } from "./actor-handle";
@@ -95,6 +96,8 @@ type Unsubscribe = () => void;
 export interface ClientConnection {
   readonly ready: Promise<void>;
   readonly status: ConnectionStatus;
+  /** Server-assigned client id for this connection. `null` until the server's welcome arrives. */
+  readonly clientId: string | null;
   subscribe(cb: (status: ConnectionStatus) => void): Unsubscribe;
   close(): void;
 }
@@ -107,6 +110,7 @@ export function createClient<TApp extends AppDef<any>>(
   options: ClientOptions,
 ): ClientApi<TApp> & {
   connection: ClientConnection;
+  clientId: string | null;
   $close(): void;
   $ready: Promise<void>;
   $status: ConnectionStatus;
@@ -141,6 +145,7 @@ export function createClient<TApp extends AppDef<any>>(
 
   // -- Connection status -----------------------------------------------------
   let currentStatus: ConnectionStatus = "connecting";
+  let currentClientId: string | null = null;
   const statusListeners = new Set<(status: ConnectionStatus) => void>();
 
   function setStatus(next: ConnectionStatus): void {
@@ -247,6 +252,7 @@ export function createClient<TApp extends AppDef<any>>(
     if (socket !== ws) return;
 
     connected = false;
+    currentClientId = null;
     ws = null;
     rejectAllPendingRpcs(reason);
 
@@ -294,6 +300,10 @@ export function createClient<TApp extends AppDef<any>>(
       if (!msg) return;
 
       switch (msg.type) {
+        case MSG.WELCOME: {
+          currentClientId = (msg as WelcomeMessage).clientId;
+          break;
+        }
         case MSG.RPC_RESULT: {
           const rpcMsg = msg as RpcResultMessage;
           const entry = pendingRpcs.get(rpcMsg.id);
@@ -452,6 +462,9 @@ export function createClient<TApp extends AppDef<any>>(
     get status() {
       return currentStatus;
     },
+    get clientId() {
+      return currentClientId;
+    },
     subscribe(cb) {
       statusListeners.add(cb);
       return () => {
@@ -466,6 +479,7 @@ export function createClient<TApp extends AppDef<any>>(
   const proxy = new Proxy({} as any, {
     get(_target, prop: string) {
       if (prop === "connection") return connectionApi;
+      if (prop === "clientId") return currentClientId;
       if (prop === "$close") {
         return closeClient;
       }

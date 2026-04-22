@@ -33,8 +33,8 @@ function waitFor(
 
 describe("Middleware", () => {
   test("middleware context flows to handler", async () => {
-    const authed = middleware().use(async ({ connectionId }) => {
-      return { userId: `user-${connectionId}` };
+    const authed = middleware().use(async ({ clientId }) => {
+      return { userId: `user-${clientId}` };
     });
 
     const MyActor = authed.actor({
@@ -236,7 +236,7 @@ describe("Middleware", () => {
       await client.$ready;
       await client.my("test-id").ping();
       expect(capturedArgs).not.toBeNull();
-      expect(typeof capturedArgs!.connectionId).toBe("string");
+      expect(typeof capturedArgs!.clientId).toBe("string");
       expect(capturedArgs!.actor).toBe("my");
       expect(capturedArgs!.actorId).toBe("test-id");
       expect(capturedArgs!.method).toBe("ping");
@@ -280,9 +280,9 @@ describe("Middleware", () => {
   });
 
   test("middleware receives transport auth metadata", async () => {
-    const authed = middleware().use(async ({ connectionId, userId, claims, scope }) => {
+    const authed = middleware().use(async ({ clientId, userId, claims, scope }) => {
       return {
-        connectionId,
+        clientId,
         userId,
         role: claims.role,
         workspaceId: scope?.workspaceId ?? null,
@@ -324,7 +324,7 @@ describe("Middleware", () => {
       type: MSG.RPC_RESULT,
       id: "rpc-1",
       result: {
-        connectionId: "session-1",
+        clientId: "session-1",
         userId: "user-123",
         role: "admin",
         workspaceId: "ws-1",
@@ -338,7 +338,7 @@ describe("Middleware", () => {
       state: z.object({
         connections: z.array(
           z.object({
-            connectionId: z.string(),
+            clientId: z.string(),
             userId: z.union([z.string(), z.null()]),
             projectId: z.union([z.string(), z.null()]),
             role: z.union([z.string(), z.null()]),
@@ -351,16 +351,16 @@ describe("Middleware", () => {
           handler: () => "pong",
         },
       },
-      onConnect({ state, connectionId, userId, claims, scope }) {
+      onConnect({ state, clientId, userId, claims, scope }) {
         state.connections.push({
-          connectionId,
+          clientId,
           userId,
           projectId: scope?.projectId ?? null,
           role: typeof claims.role === "string" ? claims.role : null,
         });
       },
-      onDisconnect({ state, connectionId }) {
-        state.disconnected.push(connectionId);
+      onDisconnect({ state, clientId }) {
+        state.disconnected.push(clientId);
       },
     });
 
@@ -383,7 +383,7 @@ describe("Middleware", () => {
     expect(instance.getState()).toEqual({
       connections: [
         {
-          connectionId: "session-2",
+          clientId: "session-2",
           userId: "user-456",
           projectId: "prj-9",
           role: "member",
@@ -397,7 +397,7 @@ describe("Middleware", () => {
     expect(instance.getState()).toEqual({
       connections: [
         {
-          connectionId: "session-2",
+          clientId: "session-2",
           userId: "user-456",
           projectId: "prj-9",
           role: "member",
@@ -420,8 +420,8 @@ describe("Middleware", () => {
       methods: {
         ping: { handler: () => "pong" },
       },
-      onConnect({ state, connectionId }) {
-        state.connections.push(connectionId);
+      onConnect({ state, clientId }) {
+        state.connections.push(clientId);
       },
     });
 

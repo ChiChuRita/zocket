@@ -1,4 +1,5 @@
 import { actor, createApp } from "../core/src/index";
+import type { EmitBuilder } from "../core/src/index";
 import { serve } from "../server/src/bun";
 import { z } from "zod";
 
@@ -99,16 +100,16 @@ function pickWord() {
   return word;
 }
 
-function getPlayer(state: GameState, connectionId: string) {
-  return state.players.find((player) => player.connectionId === connectionId);
+function getPlayer(state: GameState, clientId: string) {
+  return state.players.find((player) => player.connectionId === clientId);
 }
 
 function ensurePlayer(
   state: GameState,
-  connectionId: string,
+  clientId: string,
   next?: Partial<Pick<ExamplePlayer, "name" | "color" | "online">>,
 ) {
-  const existing = getPlayer(state, connectionId);
+  const existing = getPlayer(state, clientId);
   if (existing) {
     if (next?.name) existing.name = next.name;
     if (next?.color) existing.color = next.color;
@@ -118,8 +119,8 @@ function ensurePlayer(
   }
 
   const player = {
-    connectionId,
-    name: next?.name ?? `Player ${connectionId.slice(-4)}`,
+    connectionId: clientId,
+    name: next?.name ?? `Player ${clientId.slice(-4)}`,
     color: next?.color ?? "#F97316",
     score: 0,
     online: next?.online ?? true,
@@ -133,8 +134,8 @@ function onlinePlayers(state: GameState) {
   return state.players.filter((player) => player.online);
 }
 
-function nameFor(state: GameState, connectionId: string) {
-  return getPlayer(state, connectionId)?.name ?? `Player ${connectionId.slice(-4)}`;
+function nameFor(state: GameState, clientId: string) {
+  return getPlayer(state, clientId)?.name ?? `Player ${clientId.slice(-4)}`;
 }
 
 function chooseNextDrawer(state: GameState) {
@@ -152,9 +153,18 @@ function chooseNextDrawer(state: GameState) {
   return candidates[(currentIndex + 1) % candidates.length];
 }
 
+type RoundEndedEmit = (
+  event: "roundEnded",
+  payload: {
+    winnerName: string | null;
+    word: string;
+    reason: "guessed" | "drawer-left" | "restarted";
+  },
+) => EmitBuilder;
+
 function revealRound(
   state: GameState,
-  emit: (event: "roundEnded", payload: { winnerName: string | null; word: string; reason: "guessed" | "drawer-left" | "restarted"; }) => void,
+  emit: RoundEndedEmit,
   reason: "guessed" | "drawer-left" | "restarted",
   winnerName: string | null,
 ) {
@@ -168,23 +178,23 @@ function revealRound(
     winnerName,
     word: hiddenRound.word,
     reason,
-  });
+  }).broadcast();
   hiddenRound.word = null;
   hiddenRound.drawerConnectionId = null;
 }
 
 export const game = actor({
   state: GameStateSchema,
-  onConnect: ({ state, connectionId, emit }) => {
-    const player = ensurePlayer(state, connectionId, { online: true });
+  onConnect: ({ state, clientId, emit }) => {
+    const player = ensurePlayer(state, clientId, { online: true });
     state.updatedAt = now();
     emit("presenceChanged", {
       name: player.name,
       online: true,
-    });
+    }).broadcast();
   },
-  onDisconnect: ({ state, connectionId, emit }) => {
-    const player = getPlayer(state, connectionId);
+  onDisconnect: ({ state, clientId, emit }) => {
+    const player = getPlayer(state, clientId);
     if (!player) return;
 
     player.online = false;
@@ -193,10 +203,10 @@ export const game = actor({
     emit("presenceChanged", {
       name: player.name,
       online: false,
-    });
+    }).broadcast();
 
-    if (hiddenRound.drawerConnectionId === connectionId && hiddenRound.word) {
-      revealRound(state, emit, "drawer-left", null);
+    if (hiddenRound.drawerConnectionId === clientId && hiddenRound.word) {
+      revealRound(state, emit as RoundEndedEmit, "drawer-left", null);
     }
   },
   methods: {
@@ -205,8 +215,8 @@ export const game = actor({
         name: z.string().trim().min(1).max(24),
         color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/),
       }),
-      handler: ({ state, input, connectionId, emit }) => {
-        const player = ensurePlayer(state, connectionId, {
+      handler: ({ state, input, clientId, emit }) => {
+        const player = ensurePlayer(state, clientId, {
           name: input.name,
           color: input.color,
           online: true,
@@ -215,7 +225,7 @@ export const game = actor({
         emit("presenceChanged", {
           name: player.name,
           online: true,
-        });
+        }).broadcast();
 
         return {
           player,
@@ -224,7 +234,7 @@ export const game = actor({
       },
     },
     startRound: {
-      handler: ({ state, emit, connectionId }) => {
+      handler: ({ state, emit, clientId }) => {
         const nextDrawer = chooseNextDrawer(state);
         if (!nextDrawer) {
           return {
@@ -234,7 +244,7 @@ export const game = actor({
         }
 
         if (hiddenRound.word) {
-          revealRound(state, emit, "restarted", null);
+          revealRound(state, emit as RoundEndedEmit, "restarted", null);
         }
 
         const word = pickWord();
@@ -256,21 +266,21 @@ export const game = actor({
           round: state.round,
           drawerName: nextDrawer.name,
           wordLength: word.length,
-        });
+        }).broadcast();
 
         return {
           ok: true as const,
           drawerName: nextDrawer.name,
-          isDrawer: nextDrawer.connectionId === connectionId,
+          isDrawer: nextDrawer.connectionId === clientId,
         };
       },
     },
     peekWord: {
-      handler: ({ state, connectionId }) => {
+      handler: ({ state, clientId }) => {
         if (
           state.phase !== "drawing" ||
-          connectionId !== state.drawerConnectionId ||
-          hiddenRound.drawerConnectionId !== connectionId
+          clientId !== state.drawerConnectionId ||
+          hiddenRound.drawerConnectionId !== clientId
         ) {
           return {
             ok: false as const,
@@ -290,11 +300,11 @@ export const game = actor({
         width: z.number().min(1).max(32),
         points: z.array(PointSchema).min(1).max(300),
       }),
-      handler: ({ state, input, connectionId, emit }) => {
+      handler: ({ state, input, clientId, emit }) => {
         if (
           state.phase !== "drawing" ||
-          connectionId !== state.drawerConnectionId ||
-          hiddenRound.drawerConnectionId !== connectionId
+          clientId !== state.drawerConnectionId ||
+          hiddenRound.drawerConnectionId !== clientId
         ) {
           return { ok: false as const };
         }
@@ -311,19 +321,19 @@ export const game = actor({
         state.updatedAt = now();
 
         emit("strokeCommitted", {
-          by: nameFor(state, connectionId),
+          by: nameFor(state, clientId),
           count: state.strokes.length,
-        });
+        }).broadcast();
 
         return { ok: true as const };
       },
     },
     clearBoard: {
-      handler: ({ state, connectionId }) => {
+      handler: ({ state, clientId }) => {
         if (
           state.phase !== "drawing" ||
-          connectionId !== state.drawerConnectionId ||
-          hiddenRound.drawerConnectionId !== connectionId
+          clientId !== state.drawerConnectionId ||
+          hiddenRound.drawerConnectionId !== clientId
         ) {
           return { ok: false as const };
         }
@@ -337,16 +347,16 @@ export const game = actor({
       input: z.object({
         text: z.string().trim().min(1).max(80),
       }),
-      handler: ({ state, input, connectionId, emit }) => {
+      handler: ({ state, input, clientId, emit }) => {
         if (state.phase !== "drawing" || !hiddenRound.word) {
           return { ok: false as const, correct: false as const };
         }
 
-        if (connectionId === state.drawerConnectionId) {
+        if (clientId === state.drawerConnectionId) {
           return { ok: false as const, correct: false as const };
         }
 
-        const player = ensurePlayer(state, connectionId, { online: true });
+        const player = ensurePlayer(state, clientId, { online: true });
         const correct = normalize(input.text) === normalize(hiddenRound.word);
 
         state.guesses.unshift({
@@ -363,12 +373,12 @@ export const game = actor({
           by: player.name,
           text: input.text,
           correct,
-        });
+        }).broadcast();
 
         if (correct) {
           player.score += 1;
-          state.winnerConnectionId = connectionId;
-          revealRound(state, emit, "guessed", player.name);
+          state.winnerConnectionId = clientId;
+          revealRound(state, emit as RoundEndedEmit, "guessed", player.name);
         }
 
         return {

@@ -40,8 +40,10 @@ export interface MethodContext<
   state: TState;
   input: TInput extends StandardSchemaV1 ? InferSchema<TInput> : undefined;
   emit: TypedEmitFn<TEvents>;
-  /** Opaque identifier for the connection that invoked this method (server-side only). */
-  connectionId: string;
+  /** Opaque identifier for the client that invoked this method. Stable for one WebSocket connection. */
+  clientId: string;
+  /** Snapshot of client ids currently known to this actor instance (connected + subscribed). */
+  clients: ReadonlySet<string>;
   /** Middleware context, always present. Defaults to an empty object. */
   ctx: TCtx;
 }
@@ -57,36 +59,29 @@ export type MethodDefs = Record<string, MethodDef<any, any>>;
 export type EventDefs = Record<string, StandardSchemaV1>;
 
 /**
+ * Builder returned by `emit(event, payload)`. Terminal methods dispatch the event;
+ * without a terminal call nothing is sent. Terminals are mutually exclusive —
+ * pick one per emit.
+ */
+export interface EmitBuilder {
+  /** Deliver to the specified client id(s). Unsubscribed ids are silently skipped. */
+  to(clientId: string | readonly string[]): void;
+  /** Deliver to every subscribed client except the specified id(s). */
+  except(clientId: string | readonly string[]): void;
+  /** Deliver to every subscribed client. */
+  broadcast(): void;
+}
+
+/**
  * Typed emit function — constrains event names and payload types to declared events.
- *
- * Already used internally by `MethodContext`. If you want **explicit** type-checking
- * on `emit` inside a handler, destructure and annotate the emit parameter:
+ * Returns an `EmitBuilder`; you must call `.broadcast()`, `.to(...)`, or `.except(...)`
+ * to actually dispatch the event.
  *
  * ```ts
- * import type { TypedEmitFn } from "@zocket/core";
- *
- * const events = { message: MessageSchema };
- *
- * const MyActor = actor({
- *   state: MyState,
- *   events,
- *   methods: {
- *     send: {
- *       input: SendInput,
- *       handler: ({ state, input, emit }: {
- *         state: InferSchema<typeof MyState>;
- *         input: InferSchema<typeof SendInput>;
- *         emit: TypedEmitFn<typeof events>;
- *       }) => {
- *         emit("message", input); // fully typed
- *       },
- *     },
- *   },
- * });
+ * emit("message", payload).broadcast();
+ * emit("message", payload).to(clientId);
+ * emit("message", payload).except(clientId);
  * ```
- *
- * In most cases you don't need this — `emit` payloads are validated at runtime
- * against the event schemas regardless of compile-time types.
  */
 export type TypedEmitFn<TEvents extends Record<string, any>> = <
   K extends string & keyof TEvents,
@@ -95,10 +90,10 @@ export type TypedEmitFn<TEvents extends Record<string, any>> = <
   payload: TEvents[K] extends StandardSchemaV1
     ? InferSchema<TEvents[K]>
     : unknown,
-) => void;
+) => EmitBuilder;
 
 /** Untyped emit function for generic / runtime contexts */
-export type EmitFn = (event: string, payload: unknown) => void;
+export type EmitFn = (event: string, payload: unknown) => EmitBuilder;
 
 // ---------------------------------------------------------------------------
 // Lifecycle hooks
@@ -107,8 +102,10 @@ export type EmitFn = (event: string, payload: unknown) => void;
 /** Context passed to onConnect / onDisconnect lifecycle hooks */
 export interface LifecycleContext<TState> {
   state: TState;
-  /** Opaque connection identifier — stable for the lifetime of a WebSocket. */
-  connectionId: string;
+  /** Opaque client identifier — stable for the lifetime of a WebSocket. */
+  clientId: string;
+  /** Snapshot of client ids currently known to this actor instance. */
+  clients: ReadonlySet<string>;
   /** Authenticated user identity, when the transport provides it. */
   userId: string | null;
   /** Verified auth claims or other connection-scoped metadata. */
@@ -346,11 +343,17 @@ export interface StatePatchMessage {
   patches: JsonPatchOp[];
 }
 
+export interface WelcomeMessage {
+  type: "welcome";
+  clientId: string;
+}
+
 export type ServerMessage =
   | RpcResultMessage
   | EventMessage
   | StateSnapshotMessage
-  | StatePatchMessage;
+  | StatePatchMessage
+  | WelcomeMessage;
 
 export type ClientMessage =
   | RpcCallMessage

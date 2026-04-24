@@ -1,23 +1,30 @@
 # Competition
 
-The market is real, but the comparison only works if Zocket stays in the right frame.
+The market is real, but the comparison only works if Zocket stays in the right
+frame.
 
-The wrong frame is:
+The old frame was:
 
-- generic actor platform
-- generic durable compute
-- workflows, jobs, and agents in one umbrella runtime
+- typed realtime app framework
+- better WebSocket DX
+- app-level state sync
 
-The right frame is:
+The current frame is sharper and more infrastructure-shaped:
 
-- typed actors for realtime apps
-- message-driven stateful backend primitives
-- strong client DX
-- productized deployment
+- TypeScript-native actor infrastructure
+- stateful realtime backend primitives
+- typed client interaction
+- productized hosted deployment
+
+The wrong frame is still:
+
+- generic compute
+- generic durable jobs
+- workflows, agents, actors, and containers in one runtime
 
 ## Rivet
 
-Rivet is the clearest actor-platform comparison.
+Rivet is the clearest actor-infrastructure comparison.
 
 It is strong on:
 
@@ -28,19 +35,51 @@ It is strong on:
 - low-level HTTP and WebSocket handling
 - broader infrastructure framing
 
-This matters because Rivet already occupies the "powerful actor infrastructure" position.
+This matters because Rivet already occupies the broad "actor infrastructure"
+position.
 
-Zocket should not try to beat it by matching infrastructure breadth.
+Zocket should compete here, but not by matching Rivet's entire surface area.
 
 The useful distinction is:
 
-- Rivet is actor infrastructure
-- Zocket should be the best way to build a realtime app
+- Rivet is broader actor infrastructure
+- Zocket should be the TypeScript-native actor platform for realtime products
+
+That means Zocket has to be better on:
+
+- inferred TypeScript APIs
+- React client ergonomics
+- state subscriptions and patches
+- app-shaped actor examples
+- simple deploy path for TS teams
 
 Relevant docs:
 
 - [Rivet Actors Overview](https://rivet.dev/docs/actors/)
 - [Rivet SQLite + Drizzle](https://rivet.dev/docs/actors/sqlite-drizzle)
+
+## Cloudflare Durable Objects And PartyKit
+
+Cloudflare Durable Objects and PartyKit are important because they prove the
+"one live object per room/session/entity" model.
+
+They are strong on:
+
+- edge placement
+- durable object identity
+- low operational burden
+- natural room/session modeling
+- Cloudflare ecosystem integration
+
+The tradeoff is that teams buy into Cloudflare's runtime constraints and still
+do more of their own protocol, typing, and state-sync work.
+
+Zocket's distinction should be:
+
+- less edge-first
+- more TypeScript-contract-first
+- more actor-method and state-subscription oriented
+- self-hostable core with hosted infrastructure as the convenience path
 
 ## Trigger.dev
 
@@ -54,9 +93,10 @@ It is strong on:
 - scheduled work
 - realtime updates around long-running tasks
 
-This is not the same product shape as Zocket, but it competes for some of the same developer attention.
+This is not the same product shape as Zocket, but it competes for developer
+attention if Zocket drifts into generic jobs and workflows.
 
-The risk is not direct product overlap. The risk is product drift.
+The risk is product drift.
 
 If Zocket starts becoming:
 
@@ -64,7 +104,8 @@ If Zocket starts becoming:
 - a jobs platform
 - a detached agent runtime
 
-then it enters Trigger.dev's frame instead of strengthening its own.
+then it enters Trigger.dev's frame instead of strengthening its actor runtime
+position.
 
 Relevant docs:
 
@@ -74,7 +115,8 @@ Relevant docs:
 
 ## SpacetimeDB
 
-SpacetimeDB is important because it competes for multiplayer and collaborative apps.
+SpacetimeDB is important because it competes for multiplayer and collaborative
+apps.
 
 It is strong on:
 
@@ -88,7 +130,7 @@ Its center of gravity is different from both Zocket and Rivet.
 The clean distinction is:
 
 - SpacetimeDB is a programmable realtime database
-- Zocket should stay centered on addressable actors and typed application messaging
+- Zocket is addressable actors plus typed application messaging
 
 Relevant docs:
 
@@ -106,12 +148,13 @@ That means avoiding:
 - generic `run` primitives
 - broad workflow orchestration
 - messaging that tries to cover jobs, workflows, actors, agents, and compute all at once
+- durability claims the current runtime cannot defend
 
 That is how Zocket gets pulled into stronger competitors' categories.
 
 ## Where Zocket Can Win
 
-Zocket should win on product focus and developer experience.
+Zocket should win on TypeScript focus and realtime actor ergonomics.
 
 The strongest wedge is the combination of:
 
@@ -120,31 +163,33 @@ The strongest wedge is the combination of:
 - built-in subscriptions and state sync
 - excellent TypeScript and React integration
 - open source adoption and trust
-- a deploy flow that feels simple
+- a hosted deploy flow that hides gateway, NATS, and runtime operations
 
 In practice that means the product should feel like:
 
 - define actor once
+- deploy a bundle
 - call methods from the client with types
 - subscribe naturally
-- avoid manual protocol work
+- avoid manual protocol and runtime work
 
 ## Positioning
 
-The best positioning is still narrow and opinionated.
+The best positioning is narrow and infrastructure-credible.
 
 Good:
 
-- typed actors for realtime apps
-- the fastest way to build multiplayer and collaborative backends
+- TypeScript-native actor infrastructure
+- hosted actors for realtime products
+- the fastest way to build multiplayer and collaborative backends in TypeScript
 - end-to-end typed realtime state over WebSockets
-- stateful message handlers for realtime apps
+- stateful message handlers with hosted routing and deployment
 
 Bad:
 
-- distributed actor infrastructure
-- general actor runtime
-- general stateful compute
+- generic distributed compute
+- generic workflow platform
+- actor-shaped serverless without a strong client story
 
 Not this:
 
@@ -157,7 +202,9 @@ The competition is a useful constraint.
 It says:
 
 - the category is real
-- there is demand for stateful realtime systems
+- there is demand for stateful actor infrastructure
 - Zocket has to be sharper, not broader
+- the TypeScript realtime wedge is the credible way in
 
-The best move is still to double down on typed realtime apps, not generic actor infrastructure.
+The best move is to become the most natural actor infrastructure choice for
+TypeScript realtime teams, not a catch-all compute platform.

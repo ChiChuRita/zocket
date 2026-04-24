@@ -1,55 +1,48 @@
 # Platform
 
-This note defines the MVP Zocket platform product: the authenticated app, account flow, dashboard, and CLI deploy path.
+This note defines the current MVP Zocket platform product: the authenticated
+dashboard, control-plane API, account flow, and CLI deploy path.
 
-The platform should feel closer to TanStack or WorkOS than to a heavy enterprise control plane:
+The platform should feel closer to TanStack or WorkOS than to a heavy enterprise
+control plane:
 
 - technical and clean
 - productized but not bloated
 - one obvious path from sign-up to first deploy
 
-This should stay very MVP-ish.
+This should stay MVP-ish, but it must match the implementation.
 
 ## Stack
 
-The v1 platform stack should be:
+The current v1 platform stack is:
 
 - TanStack Start for the dashboard app shell, routing, and frontend
-- `shadcn/ui` for the dashboard component layer
-- Cloudflare hosting for the dashboard, same as the docs site
-- WorkOS AuthKit for authentication
-- Convex for backend logic and database
+- Cloudflare Workers for the platform app
+- Elysia mounted under `/api` for the control-plane API
+- WorkOS AuthKit for browser authentication
+- Neon Postgres for platform data
+- Drizzle for schema and migrations
+- S3-compatible object storage for deployment bundles
+- Pulumi ESC for shared local/deploy configuration
 
-This is the right MVP tradeoff:
-
-- fast to build
-- one clear frontend stack
-- same hosting posture for docs and dashboard
-- good auth out of the box
-- no custom control-plane backend to maintain yet
-- one simple place for platform data and mutations
+The older Convex plan is no longer current. Platform records now live in Neon,
+and deployment bundles live in S3-compatible storage.
 
 ## UI Preset
 
-Use the `shadcn` preset with:
+The dashboard should continue using the existing component direction:
 
-- `--preset b7ClRnk2C`
-
-This should be the default visual and component starting point for the MVP platform.
-
-The goal is to avoid spending time inventing a design system too early while still getting a clean, technical interface.
-
-The rule is:
-
-- strictly use `shadcn` components
-- do not try to design too much from scratch
-- do not introduce a custom design system in v1
+- `shadcn/ui`-style components
+- restrained technical UI
+- standard tables, forms, cards, tabs, alerts, and buttons
+- no custom design system until the first deploy loop works end to end
 
 ## Product Goal
 
 The platform only needs to do a few things well:
 
 - let a developer create an account
+- create a default workspace
 - let them create a project
 - let them get a deploy token
 - let them deploy with the CLI
@@ -59,178 +52,130 @@ That is enough for v1.
 
 ## Surface Area
 
-The platform should have two surfaces:
+The platform has two product surfaces:
 
 1. authenticated dashboard
 2. CLI
 
-If those two surfaces feel coherent, the platform already feels real.
+The dashboard and CLI talk to the same Elysia control-plane API.
 
 ## Account Model
 
 Keep the account model minimal.
 
-Recommended v1 shape:
-
-- user account
-- one default workspace created automatically on sign-up
-- projects live inside that workspace
-
-This gives a path to team support later without forcing full organization management now.
-
-The model can be:
+Current v1 shape:
 
 - `user`
 - `workspace`
+- `workspace_membership`
 - `project`
+- `project_auth_config`
+- `runtime_config`
 - `deployment`
-- `api_token`
+- `deploy_token`
+- `cli_token`
+- `device_flow`
 
-Those records should live in Convex for v1.
-
-You can call the container `workspace` or `team`. `workspace` is probably the better MVP word.
+Those records live in Neon through Drizzle. A default workspace is created when a
+browser-authenticated WorkOS user first touches the platform API.
 
 ## Authentication
 
-Use a boring hosted auth system.
+There are two auth paths.
 
-The simplest good choice is:
+Browser auth:
 
-- WorkOS AuthKit
-- GitHub login first
-- email login or magic link as a fallback
+- WorkOS AuthKit handles sign-in.
+- TanStack Start obtains the WorkOS session.
+- The `/api/$` route forwards verified WorkOS identity to the mounted Elysia app.
+- The Elysia API upserts the platform user and workspace in Neon.
 
-Why:
+CLI auth:
 
-- fast to ship
-- looks polished
-- less custom auth work
-- easy path to teams and enterprise features later if needed
+- `zocket auth` starts a platform device flow.
+- The CLI prints and opens the `/verify` URL.
+- The user approves the device flow in the browser after WorkOS sign-in.
+- The platform mints a `cli_token` stored in `~/.zocket/config.json`.
 
-Do not build custom auth for the MVP platform.
+Deploy auth:
 
-Convex should hold the platform-side user, workspace, project, deployment, and token records.
+- `zocket init` and `zocket link` create deploy tokens.
+- `zocket deploy` uploads bundles using a project deploy token.
+- Deploy tokens are hashed in Neon and can be revoked.
 
 ## Dashboard
 
-The dashboard should be extremely small.
+The dashboard should remain small.
 
-V1 pages:
+Current v1 pages:
 
 - sign in / sign up
 - dashboard home
 - create project
 - project detail
-- deployments list
-- token creation
+- CLI verification page
 
-That is enough.
+Dashboard home shows:
 
-The dashboard backend should stay thin:
-
-- Cloudflare hosts the frontend
-- Convex queries for reads
-- Convex mutations for actions
-- TanStack UI on top
-
-### Dashboard home
-
-Show:
-
+- workspace name
 - list of projects
-- latest deployment status
-- project domain like `acme.zocket.io`
-- button to create a new project
+- deployment status
+- project WebSocket endpoint
+- create project button
 
-### Project detail
-
-Show:
+Project detail shows:
 
 - project name
 - default domain
-- current active deployment
-- recent deployments
-- CLI install and deploy command
-- API token section
-
-### Token page or section
-
-Allow:
-
-- create deploy token
-- copy once
-- revoke token later
-
-That is the minimum required for CLI-based deploys.
+- deployment status
+- deploy token creation
+- CLI connection values
 
 ## CLI Flow
 
-The CLI should be the main deployment interface.
+The CLI is the main deployment interface.
 
-The ideal MVP flow is:
+Current MVP flow:
 
 1. `zocket auth`
-2. the CLI starts a WorkOS CLI Auth flow
-3. the CLI opens the verification URL or prints it
-4. the user signs in on the platform
-5. the CLI polls until WorkOS returns tokens
-6. the CLI stores the resulting user token locally
-7. `zocket init` or `zocket link`
-8. `zocket deploy`
+2. platform creates a device flow
+3. CLI opens `/verify?deviceCode=...`
+4. user signs in with WorkOS and approves the session
+5. CLI polls until the platform returns a CLI token
+6. `zocket init --name <name> --entry <file>` creates a project and default deploy token
+7. `zocket link --project <slug>` links an existing project and creates a deploy token
+8. `zocket deploy` bundles the entry with Bun and uploads it to `/api/deployments`
 
-The important product behavior is:
+The deploy command currently:
 
-- auth happens on the platform, not inside the terminal
-- the CLI should just launch the login flow and receive the result
+- bundles the entry with `Bun.build({ target: "bun", format: "esm" })`
+- stores the bundle in S3-compatible object storage
+- creates a deployment row in Neon
+- marks the project active deployment
+- calls `ensureProjectRuntime(...)`
 
-The clean MVP implementation is to use WorkOS CLI Auth directly:
+## Current Runtime Caveat
 
-- CLI requests a device authorization from WorkOS
-- WorkOS returns a device code, user code, verification URL, and polling interval
-- CLI opens the verification URL automatically when possible
-- user logs in with WorkOS AuthKit
-- CLI polls WorkOS until the device flow completes
-- CLI stores the resulting token set in a local config file
+`ensureProjectRuntime(...)` is still a stub in
+`platform/src/server/deploy.ts`.
 
-If opening the browser fails, the fallback can be:
+That means the platform can create projects, issue tokens, store bundles, and
+record deployments, but it cannot yet automatically create or update the
+per-project AWS runtime service end to end.
 
-- print the verification URL and user code
-- ask the user to open it manually
-
-That deploy command should:
-
-- package the bundle
-- upload it through the platform API
-- store the bundle in Convex file storage
-- create a deployment record in Convex
-- trigger a runtime update
-- print the project domain
-
-If possible, `zocket deploy` should also print the live WebSocket URL immediately.
-
-## First-Run Experience
-
-The first-run experience matters more than control-plane breadth.
-
-A new user should be able to:
-
-1. sign up
-2. create a project
-3. install the CLI
-4. log in from the CLI
-5. deploy once
-6. connect to `wss://project-or-tenant.zocket.io`
-
-If that loop feels clean, the platform is good enough for v1.
+Until that is implemented, the hosted deploy story is incomplete.
 
 ## Deployment Model
 
-For the dashboard and CLI, the platform only needs to support one deployment concept:
+The platform only needs one deployment concept in v1:
 
 - upload a versioned bundle
-- store deployment metadata in Convex
-- mark one version active
-- restart or refresh the dedicated runtime for that project or tenant
+- store deployment metadata in Neon
+- store bundle code in S3-compatible storage
+- mark one deployment active for the project
+- start or update the dedicated project runtime
+- runtime fetches the active bundle from the platform API
+- runtime reports ready or failed status back to the platform
 
 Do not add complicated rollout controls yet.
 
@@ -241,19 +186,29 @@ No need for:
 - environment matrices
 - branch previews
 
-Not in v1.
+Rollback is important, but it should be a focused deploy reliability feature, not
+a full release-management system.
 
-## MVP Visual Direction
+## Environment
 
-The platform should feel technical and calm.
+The canonical dev configuration lives in:
 
-UI rules:
+- `infra/esc/platform-dev.yaml`
 
-- use the selected `shadcn` preset
-- keep layouts plain and functional
-- prefer standard `shadcn` tables, forms, dialogs, cards, and tabs
-- avoid custom visual experiments
-- avoid building bespoke components unless the flow truly needs one
+Expected platform values include:
+
+- `DATABASE_URL`
+- `WORKOS_CLIENT_ID`
+- `WORKOS_API_KEY`
+- `WORKOS_REDIRECT_URI`
+- `WORKOS_COOKIE_PASSWORD`
+- `AWS_REGION`
+- `S3_BUCKET`
+- `S3_ENDPOINT`
+- `S3_FORCE_PATH_STYLE`
+- `PLATFORM_PUBLIC_URL`
+- `CONTROL_PLANE_URL`
+- `CONTROL_PLANE_INTERNAL_TOKEN`
 
 ## Out Of Scope
 
@@ -268,21 +223,21 @@ Do not add these yet:
 - advanced audit logs
 - RBAC complexity
 
-Those can come after the first deploy flow works well.
+Those can come after the first deploy flow works end to end.
 
 ## Short Version
 
-The MVP platform should be:
+The MVP platform is:
 
-- a very small dashboard
-- TanStack Start frontend
-- `shadcn/ui` components
-- Cloudflare-hosted web app
+- a small TanStack Start dashboard
+- Cloudflare Workers hosting
 - WorkOS AuthKit
-- Convex backend and database
+- Elysia control-plane API
+- Neon + Drizzle platform database
+- S3-compatible deployment bundle storage
 - one default workspace per user
 - project creation
 - deploy tokens
-- `zocket auth` and `zocket deploy`
+- `zocket auth`, `zocket init`, `zocket link`, and `zocket deploy`
 
-If that loop feels polished, the platform is good enough.
+The major missing piece is automatic project runtime orchestration.

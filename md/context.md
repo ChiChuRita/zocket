@@ -1,21 +1,22 @@
 # Context
 
-Zocket is a typed realtime application platform built around stateful actors.
+Zocket is TypeScript-native actor infrastructure for realtime products.
 
 The product idea is simple:
 
 - define an actor
 - call it from the client with full types
 - subscribe to events and state changes
-- ship without building your own socket protocol
+- deploy without building your own socket runtime
 
-The best short description is still:
+The short description is:
 
-Zocket is "Vercel for realtime."
+Zocket is "Vercel for realtime actors."
 
 ## Core Model
 
-Zocket asks developers to think in stateful actors instead of raw sockets.
+Zocket asks developers to model realtime systems as addressable stateful actors
+instead of raw sockets or global event handlers.
 
 Instead of:
 
@@ -30,6 +31,7 @@ the model is:
 - call typed methods
 - let the actor own state
 - stream events and state changes back to clients
+- let the platform route sessions and deployments
 
 The natural mapping is strong for:
 
@@ -41,90 +43,111 @@ The natural mapping is strong for:
 
 ## Product Thesis
 
-The point of the product is not generic actor infrastructure.
+The current company direction is actor infrastructure for TypeScript teams, not
+just a local realtime library.
 
-It is a better way to build realtime apps with:
+That does not mean becoming generic compute. The product should stay centered on:
 
-- typed methods
-- addressable stateful backend units
-- built-in subscriptions
-- a strong TypeScript and React story
-- a deployment model that feels productized
+- typed actors
+- stateful realtime application backends
+- built-in state and event subscriptions
+- TypeScript and React client ergonomics
+- a hosted deploy path for teams that do not want to operate gateways, NATS, and runtimes
 
-The product should feel closer to an app framework plus platform than to low-level socket infrastructure.
+The product should feel like an app framework plus managed actor platform, not a
+freeform jobs, workflows, and containers platform.
+
+## Current Stack
+
+The current implementation has two layers.
+
+Library layer:
+
+- Bun-first TypeScript monorepo
+- `@zocket/core` for actor definitions and protocol types
+- `@zocket/server` for the in-process actor runtime and Bun adapter
+- `@zocket/client` for WebSocket RPC, reconnect, state sync, and handles
+- `@zocket/react` for provider and hooks
+- Zod / Standard Schema for runtime validation
+- Immer JSON patches for state updates
+
+Hosted layer:
+
+- `@zocket/gateway` as the WebSocket ingress process
+- `@zocket/runtime` as the NATS-connected actor runtime process
+- NATS / JetStream as the internal message fabric
+- TanStack Start dashboard on Cloudflare Workers
+- Elysia control-plane API mounted under `/api`
+- WorkOS AuthKit for dashboard auth
+- Neon Postgres with Drizzle for platform data
+- S3-compatible storage for deployment bundles
+- Pulumi for Cloudflare, Neon, AWS, and per-project runtime infrastructure
 
 ## V1 Scope
 
-V1 should stay narrow.
+V1 should prove the hosted actor loop:
 
-It needs:
+- create an account
+- create a project
+- get a deploy token
+- deploy an actor bundle
+- connect clients over WebSockets
+- route messages through gateway -> NATS -> runtime -> actor
+- surface deployment status clearly
 
-- actor definitions
-- actor instances by ID
-- typed method calls
-- realtime events
-- websocket transport
-- a simple deploy story
-
-It does not need to prove every future capability.
-
-It is fine for auth, deep persistence, state sync, and control-plane breadth to be partial or follow later as long as the core loop is strong.
+The current caveat is important: project runtime orchestration is not fully wired
+in the platform app yet. `platform/src/server/deploy.ts` still throws, so hosted
+deploys can store metadata and bundles but cannot automatically create or update
+project runtimes end to end.
 
 ## Target Use Cases
 
-The strongest early use cases are the ones where shared state and low-latency interaction matter immediately.
+The strongest early users are TypeScript teams building realtime products where
+stateful server-side coordination matters.
 
 Best candidates:
 
-- chat and community apps
 - multiplayer and game backends
+- chat and community products
 - collaborative tools
-- AI conversation and agent-session apps
+- AI conversation and agent-session products
 
 These all benefit from the same primitives:
 
 - long-lived identity
 - ordered execution
-- natural concurrency boundaries
-- subscriptions tied to changing state
+- workspace/project-aware routing
+- client subscriptions tied to changing state
+- typed method calls from the frontend
 
-## Current Architecture Shape
+## Architecture Shape
 
-The current system shape is straightforward:
+The current system shape is:
 
-1. gateways terminate websocket connections and track sessions
-2. actor runtimes host actor instances and execute methods sequentially
-3. placement decides where actors live
-4. the control plane manages deploys, metadata, and scaling
-
-NATS is the internal transport between gateways and runtimes.
+1. Cloudflare serves docs and platform, and owns public DNS.
+2. Gateways terminate WebSocket connections and authorize sessions through the control plane.
+3. NATS / JetStream carries inbound actor messages and outbound session messages.
+4. Actor runtimes load project bundles and execute actor methods sequentially.
+5. The platform stores users, workspaces, projects, deployments, auth config, and runtime metadata.
 
 The important rule is:
 
-- NATS is transport
+- NATS is transport and buffering
 - actors are the compute model
-- the platform stays message-driven rather than turning into generic compute
-
-## State And Client Experience
-
-The long-term client experience should move beyond event-only APIs.
-
-The likely progression is:
-
-1. event subscriptions
-2. snapshot subscriptions
-3. incremental patches
-4. selector-style client APIs
-
-The real opportunity is not just backend actors. It is making the client side feel unusually good for realtime apps.
+- Neon is the platform system of record
+- S3-compatible storage holds deployment bundles
+- AWS hosts runtime infrastructure when enabled
 
 ## Repos And Boundaries
 
 At a high level:
 
-- `packages/` is the new implementation surface
+- `packages/` is the current implementation surface
+- `platform/` is the hosted dashboard and control plane
+- `infra/` is Pulumi-managed infrastructure
 - `docs/` is the public documentation site
 - `old/` is prior implementation history
-- `md/` is the strategy and product note system
+- `md/` is the strategy and architecture note system
 
-This note should stay short. If a topic needs depth, it should live in its own note under `md/`.
+This note should stay short. If a topic needs depth, it should live in its own
+note under `md/`.

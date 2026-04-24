@@ -4,7 +4,7 @@
 
 Define stateful actors with typed methods, events, and state — then call them from any client with full end-to-end type safety over WebSockets.
 
-**[Documentation](https://docs.zocket.ws)** | **[Getting Started](https://docs.zocket.ws/getting-started/)**
+**[Documentation](https://zocket.io)** | **[Getting Started](https://zocket.io/getting-started/)**
 
 ## Features
 
@@ -123,7 +123,7 @@ function App() {
 
 ```bash
 bun install
-bun test packages/server/test/
+bun test packages/server/test packages/client/test packages/react/test packages/runtime/test
 ```
 
 ## License

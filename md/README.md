@@ -18,7 +18,7 @@ Current notes:
 
 V1 notes:
 
-- [`v1/auth.md`](./v1/auth.md) — tenant identity, auth, routing, and isolation for the MVP.
+- [`v1/auth.md`](./v1/auth.md) — workspace/project identity, auth, routing, and isolation for the MVP.
 - [`v1/aws.md`](./v1/aws.md) — the concrete AWS setup for the MVP infrastructure.
 - [`v1/platform.md`](./v1/platform.md) — the MVP account, dashboard, and CLI deploy experience.
 

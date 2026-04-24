@@ -28,7 +28,7 @@ Current intended domain layout:
 - `zocket.io` -> docs
 - `www.zocket.io` -> redirect to `zocket.io`
 - `platform.zocket.io` -> platform worker
-- `*.zocket.io` -> hosted tenant/runtime traffic when AWS is enabled
+- `*.zocket.io` -> hosted project/runtime traffic when AWS is enabled
 
 ## Neon
 

@@ -1,8 +1,9 @@
 # Infrastructure
 
-Zocket should be multi-tenant at the platform layer while staying opinionated at the product layer.
+Zocket is multi-tenant actor infrastructure for TypeScript realtime products.
 
-The infrastructure exists to support message-driven stateful apps. It should not redefine the product as generic compute.
+The infrastructure exists to host and operate message-driven stateful actors. It
+should be infrastructure-credible without becoming a generic compute platform.
 
 ## V1 Shape
 
@@ -10,12 +11,16 @@ V1 should be simple and credible.
 
 The intended shape is:
 
-- shared gateway fleet
+- Cloudflare for public DNS, docs, and platform hosting
+- shared Bun gateway fleet
 - shared NATS / JetStream
-- dedicated actor runtimes per tenant
-- control plane for deployments, releases, and metadata
+- dedicated actor runtimes per project
+- Neon Postgres as the platform system of record
+- S3-compatible storage for deployment bundles
+- Pulumi-managed AWS runtime infrastructure when hosted runtimes are enabled
 
-This is enough to get useful isolation without taking on full sandboxing or microVM complexity.
+This is enough to get useful isolation without taking on full sandboxing or
+microVM complexity.
 
 ## Core Model
 
@@ -23,11 +28,12 @@ The core platform model is:
 
 - developers deploy versioned actor bundles
 - end users connect over WebSockets
-- actors are addressed by `(tenantId, appId, actorType, actorId)`
+- actors are addressed by `(workspaceId, projectId, actorType, actorId)`
 - each actor processes messages sequentially
-- the platform handles routing, lifecycle, and release management
+- the platform handles routing, lifecycle, deployment metadata, and runtime status
 
-The important rule is that actors are still message-driven stateful handlers. They are not generic compute containers.
+The important rule is that actors are still message-driven stateful handlers.
+They are not generic compute containers.
 
 ## Main Planes
 
@@ -38,51 +44,62 @@ The platform naturally splits into four planes.
 Gateways terminate client connections and handle:
 
 - auth and session lifecycle
-- subscriptions
-- ingress validation
+- host-based project resolution
 - publishing actor calls into JetStream
 - forwarding outbound events and state updates
 
-Gateways should stay stateless or near-stateless. They are shared infrastructure, not actor hosts.
+Gateways should stay stateless or near-stateless. They are shared ingress, not
+actor hosts.
 
 ### Actor runtimes
 
-Actor runtimes are where tenant code actually runs.
+Actor runtimes are where project code actually runs.
 
 They handle:
 
-- loading bundles
+- loading deployment bundles
+- registering actor-type consumers
 - activating actors lazily
 - sequential method execution
-- hot state
-- snapshots and restore
+- hot in-memory state
 - event and patch emission
 
 This is the most important execution boundary in the system.
 
 ### Placement
 
-Placement decides which runtime owns a given actor.
+Placement decides which runtime owns a given project or actor.
 
-V1 can stay simple. Over time this likely becomes:
+V1 can stay simple:
 
-- stable ownership
+- one runtime service per project
+- desired count `1` by default
+- manual sizing before autoscaling
+
+Over time this can become:
+
+- stable actor ownership
+- actor migration
 - rebalance support
 - better runtime capacity awareness
 
-The product does not need a complicated placement system before the core realtime loop is working well.
+The product does not need a complicated placement system before the core deploy
+and runtime loop works end to end.
 
 ### Control plane
 
 The control plane manages:
 
-- builds and deployment artifacts
-- releases
-- tenant metadata
-- runtime health
-- logs and metrics wiring
+- users and workspaces
+- projects and domains
+- deploy tokens and CLI tokens
+- deployment metadata
+- auth configuration
+- runtime configuration and status
+- bundle storage references
 
-This is what turns a runtime into a usable platform.
+The current control plane is a TanStack Start app on Cloudflare Workers with an
+Elysia API, Neon/Drizzle data layer, and S3-compatible bundle storage.
 
 ## Transport
 
@@ -96,43 +113,46 @@ Clients should be able to:
 - subscribe to state over time
 - reconnect cleanly
 
-Internally, NATS and JetStream handle routing and durable delivery.
+Internally, NATS and JetStream handle routing and short-lived buffering.
 
 The important boundary is:
 
 - NATS is transport and buffering
-- it is not the source of truth for actor ownership or state
+- Neon is the platform source of truth
+- actor state is currently hot in memory
+- JetStream is not a complete durability story by itself
 
 ## Durability And State
 
-The baseline durability model should be:
+The current durability model is intentionally limited:
 
-- hot state in memory
-- snapshots for cold restore
-- release metadata in the control plane
-- durable message delivery through JetStream
+- hot actor state lives in runtime memory
+- deployment metadata lives in Neon
+- deployment bundles live in S3-compatible storage
+- inbound and outbound messages use JetStream with short retention
 
-This gives the platform room to scale without forcing every actor to stay hot forever.
+This is enough for the current MVP path, but it should not be marketed as durable
+execution. Stronger snapshots, restore, and actor migration belong in later work.
 
 ## V1 Versus End State
-
-V1 does not need the full end-state architecture.
 
 V1 should prove:
 
 - the actor model
 - the gateway to runtime path
 - deploy and release flow
-- tenant-aware routing
-- enough durability for real apps
+- workspace/project-aware routing
+- enough observability for real users
+- a clear failure mode when hosted runtime orchestration is incomplete
 
 The end state can later grow into:
 
 - more advanced placement
 - stronger tenant isolation
-- broader runtime orchestration
+- snapshots and restore
 - richer reconnect and resume behavior
-- more flexible scaling across runtime hosts
+- multiple runtime hosts per project
+- better deploy rollback and smoke testing
 
 That evolution is fine as long as the product stays recognizable.
 
@@ -143,21 +163,22 @@ The most important infrastructure decision is what not to become.
 Zocket should avoid becoming:
 
 - generic background compute
-- freeform runtime infrastructure
-- a catch-all system for jobs, workflows, and arbitrary execution
+- freeform container infrastructure
+- a catch-all platform for jobs, workflows, agents, and arbitrary execution
 
 The cleaner story is:
 
 - message-driven actors
 - realtime application state
 - typed client interaction
-- deployable platform support
+- hosted routing and runtime lifecycle
 
 ## Takeaway
 
-The infrastructure should make the product feel simpler, not broader.
+The infrastructure should make actor-based realtime products easier to ship, not
+broaden Zocket into every backend category.
 
-The right mental model is still:
+The right mental model is:
 
 - define actors
 - deploy a version

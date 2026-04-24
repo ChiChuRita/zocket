@@ -1,26 +1,29 @@
 # Product Market Fit
 
-Zocket should aim for product-market fit as the best way to build typed realtime applications with stateful actors.
+Zocket should aim for product-market fit as TypeScript-native actor
+infrastructure for realtime products.
 
-The company does not need to win "actor infrastructure" in the abstract. It needs to win one sharper job: making realtime apps dramatically easier to build.
+The current direction is intentionally more infrastructure-shaped than the older
+"typed realtime app DX" thesis. The sharper version is not generic compute. It is
+managed, typed, stateful actors for teams building realtime applications.
 
 ## Thesis
 
 The strongest version of the thesis is:
 
-- typed realtime application platform
-- message-driven stateful actors
-- excellent TypeScript and React experience
-- open source with a low-friction path to adoption
-- deployable without forcing teams to reason about transport and placement
+- TypeScript-first actor infrastructure
+- stateful realtime backend primitives
+- excellent client and React ergonomics
+- open source core with a hosted deployment path
+- hosted routing, gateway, runtime, and deployment management
 
-The simplest framing is still:
+The simple framing is:
 
-Zocket is "Vercel for realtime."
+Zocket is "Vercel for realtime actors."
 
 ## The Real User Problem
 
-Teams building realtime products usually end up assembling too many moving parts:
+Teams building realtime products usually assemble too many moving parts:
 
 - WebSockets
 - RPC-style method calls
@@ -30,153 +33,162 @@ Teams building realtime products usually end up assembling too many moving parts
 - presence
 - client typing
 - backend state ownership
+- deployment and runtime routing
 
-The pain is not "I need actors."
+The pain is not only "I need actors."
 
 The pain is:
 
-- "I want backend state that stays alive and reacts in realtime."
-- "I want clients to call typed methods and subscribe without protocol glue."
-- "I do not want to build my own realtime runtime."
+- "I need a live backend object that clients can call directly."
+- "I need state that stays server-authoritative and updates clients in realtime."
+- "I do not want to operate my own gateway, message bus, and actor runtime."
 
 That is the problem Zocket should solve.
 
 ## Best Early Users
 
-The strongest early users are teams that already know they need realtime behavior and are paying the cost of building it manually.
+The strongest early users are TypeScript teams that already know they need
+realtime stateful infrastructure and are paying the cost of building it manually.
 
 Best candidates:
 
-- chat and community apps
 - multiplayer and game backends
+- chat and community products
 - collaborative tools
-- AI conversation and agent-session apps
+- AI conversation and agent-session products
 
 These all share the same useful shape:
 
 - long-lived addressable state
-- many clients reacting to the same changing data
-- both method calls and subscriptions
+- many clients reacting to the same changing entity
+- method calls and subscriptions in the same mental model
 - product value tied to low-latency UX
+- enough backend complexity that a hosted actor runtime is attractive
 
 ## Where PMF Probably Fails
 
-Zocket will struggle if it is pitched too broadly.
+Zocket will struggle if it becomes too broad before the actor wedge is proven.
 
 Weak frames:
 
-- actor platform
-- distributed systems runtime
-- general stateful compute
-- workflows, jobs, agents, and actors in one product
+- generic compute platform
+- general workflow engine
+- durable jobs platform
+- agents, jobs, workflows, actors, cron, and containers under one umbrella
 
-Those frames push Zocket into the wrong comparisons:
+Those frames push Zocket into stronger competitors' categories:
 
-- Rivet on actor-infrastructure breadth
-- Trigger.dev on workflows and durable execution
-- SpacetimeDB on programmable database and sync
+- Rivet on broad actor infrastructure
+- Trigger.dev on durable jobs and workflows
+- SpacetimeDB on programmable realtime database and sync
 
-If users need those categories first, Zocket is not the obvious winner.
+The current bet is to compete closer to the actor-infrastructure category, but
+with a narrower TypeScript realtime wedge.
 
 ## The Wedge
 
-The wedge is not backend power alone.
-
-It is the combination of:
+The wedge is the combination of:
 
 - actor-first backend model
 - end-to-end typing
 - built-in realtime subscriptions
-- state sync
+- state sync with patches
 - React-friendly client APIs
+- deployable hosted runtime
 - open source adoption and trust
-- simple deployment
 
-Open source matters because it lowers adoption risk for infrastructure-adjacent products.
-
-For the right teams it creates:
-
-- easier experimentation
-- more trust in the backend primitive
-- stronger community distribution around examples and integrations
+Open source matters because this is infrastructure-adjacent. Teams need to trust
+the primitive, inspect it, self-host it if needed, and understand what happens
+when the hosted platform is not enough.
 
 The product wins if the whole loop feels natural:
 
-1. define an actor
-2. call it from the client with types
-3. subscribe to changes naturally
-4. ship without custom realtime plumbing
+1. define actors
+2. deploy a bundle
+3. connect clients
+4. call typed methods
+5. subscribe to state and events
+6. let the platform handle routing and runtime lifecycle
 
 ## Signs Of PMF
 
-The right signals are mostly behavioral.
+The right signals are behavioral.
 
 Strong signals:
 
-- users reach a first multiplayer, chat, or collaborative prototype very quickly
-- teams describe Zocket as simpler than their current WebSocket stack
+- users reach a first multiplayer, chat, collaborative, or AI-session prototype quickly
+- teams describe Zocket as replacing a hand-built socket/runtime layer
 - subscriptions and typed client methods feel obvious without much explanation
-- teams want to self-host, inspect, or extend it because it is open source
-- early apps naturally map their domain objects to actors
+- teams ask about hosting, tenancy, deployment, logs, and rollback
+- early apps naturally map domain objects to actor IDs
 
 Especially good signs:
 
-- "We replaced a messy socket layer with this"
-- "This finally makes realtime feel normal"
-- "Our frontend team can use this without learning transport internals"
+- "We replaced a messy socket layer with this."
+- "This gives us actors without operating actor infrastructure."
+- "Our frontend team can call live backend objects without protocol glue."
 
 ## What Must Be Excellent
 
-The product probably needs to be excellent in a few areas, not merely acceptable in many.
+The product needs to be excellent in a few areas, not merely acceptable in many.
 
 Critical areas:
 
 - actor definition DX
-- typed client generation or inference
+- typed client inference
 - subscriptions and state sync
 - React integration
 - local development
 - deploy experience
+- runtime observability
+- workspace/project-aware routing and isolation
 
-If those feel awkward, the value proposition collapses quickly.
+If the library DX is good but deploys, logs, tenancy, or failure handling are
+weak, the infrastructure positioning will not hold.
 
 ## What To Avoid
 
-Avoid roadmap drift before the wedge is proven.
+Avoid infrastructure sprawl before the core actor platform is reliable.
 
 Be careful about:
 
 - generic `run` primitives
 - detached workflow execution
-- broad infrastructure abstraction
-- too many low-level escape hatches in v1
-- trying to serve every actor-shaped use case at once
+- broad background-job semantics
+- claiming durable execution before the runtime actually provides it
+- adding low-level escape hatches before the main actor path is solid
 
-The right user should understand immediately why the product exists.
+The boundary should be clear: actors for realtime applications, not every kind of
+stateful compute.
 
 ## Current Hypothesis
 
 The best current hypothesis is:
 
-Zocket can find product-market fit with TypeScript teams building chat, multiplayer, collaborative, and AI-session products who want a stateful realtime backend model without assembling sockets, subscriptions, and sync infrastructure by hand.
+Zocket can find product-market fit with TypeScript teams building multiplayer,
+chat, collaborative, and AI-session products that want hosted stateful actors
+without assembling WebSockets, subscriptions, state sync, routing, and runtime
+infrastructure by hand.
 
 That lines up with the current strategic advantage:
 
-- better app-level DX
-- tighter mental model
-- stronger client story
+- stronger TypeScript app-level DX than generic actor platforms
+- clearer stateful actor model than raw WebSocket stacks
+- better hosted runtime story than a library alone
 - open source trust and adoption
-- less infrastructure framing
+- narrow realtime focus compared with general compute platforms
 
 ## Next Step
 
-The next PMF move is not to build everything.
+The next PMF move is not to build every infrastructure feature.
 
 It is to:
 
 - pick one wedge use case
-- make the end-to-end DX dramatically better than the alternatives
-- get a few real teams to build with it
-- watch where the product feels naturally strong
+- make the end-to-end actor deploy loop work
+- close the obvious reliability and security gaps
+- get real teams to build with it
+- watch where the product naturally pulls
 
-PMF will come from a narrow and opinionated win, not broad surface area.
+PMF will come from a narrow and credible actor-infrastructure win, not broad
+surface area.

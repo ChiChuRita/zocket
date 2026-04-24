@@ -11,16 +11,16 @@ docs to match is item P1-3 below.
 
 ## P1 — Blocks design partner #1
 
-### 1. Scope actor keys by tenant
+### 1. Scope actor keys by workspace and project
 
 **What:** Change actor manager keys from `${actorName}:${actorId}` to
 `${workspaceId}:${projectId}:${actorName}:${actorId}` in
 `packages/server/src/runtime.ts:396` (and call sites).
 
-**Why:** Codex finding. Today the actor key has no tenant scope. If routing ever
+**Why:** Codex finding. Today the actor key has no workspace/project scope. If routing ever
 mis-delivers a message (gateway bug, NATS subject misconfig, deployment race), one
-tenant can read or mutate another tenant's actor state. Defense in depth: the
-runtime's own data structures should make cross-tenant access impossible by
+project can read or mutate another project's actor state. Defense in depth: the
+runtime's own data structures should make cross-project access impossible by
 construction, not just by deployment discipline.
 
 **Pros:** Closes a class of bug entirely. Cheap.
@@ -28,8 +28,8 @@ construction, not just by deployment discipline.
 **Cons:** Touches the hottest path; need to keep API stable. Test coverage gap
 makes this slightly riskier than ideal.
 
-**Context:** `md/v1/auth.md` says "dedicated runtimes per tenant" is the boundary,
-but the in-process actor manager doesn't enforce that. Today's "single tenant per
+**Context:** `md/v1/auth.md` says dedicated project runtimes are the boundary,
+but the in-process actor manager doesn't enforce that. Today's "single project per
 runtime" rule is implicit. Make it explicit in the data model.
 
 **Effort:** S (human ~half-day / CC ~1 hour).
@@ -55,7 +55,7 @@ is table stakes for "infra-grade."
 field).
 
 **Context:** Currently 9 files use `console.error("[gateway] Failed to publish
-inbound:", err)`. None of these include tenant ID, actor ID, or method name. When
+inbound:", err)`. None of these include workspace ID, project ID, actor ID, or method name. When
 a customer says "my actor is weird," there's no way to find their requests.
 
 **Effort:** M (human ~3 days / CC ~2 days).
@@ -64,10 +64,10 @@ a customer says "my actor is weird," there's no way to find their requests.
 
 ---
 
-### 3. Rewrite strategy docs to match Approach C
+### 3. [Done 2026-04-24] Rewrite strategy docs to match Approach C
 
-**What:** Rewrite `md/pmf.md`, `md/competition.md`, `md/context.md` to reflect the
-chosen positioning ("actor infrastructure for TS teams") instead of the current
+**What:** `md/pmf.md`, `md/competition.md`, and `md/context.md` now reflect the
+chosen positioning ("actor infrastructure for TS teams") instead of the older
 "narrow typed-realtime app DX" framing.
 
 **Why:** The current docs explicitly warn against the path the founder just chose.
@@ -89,7 +89,7 @@ from "best DX for one app shape" to "best TS-native actor infra." The honesty
 about single-node v1 must be in the docs from day one, not a footnote.
 
 **Effort:** S (human ~1 day / CC ~3 hours).
-**Priority:** P1.
+**Priority:** P1. Completed; keep these docs aligned as the stack changes.
 **Depends on:** none. Should happen before any outbound marketing under new positioning.
 
 ---
@@ -219,6 +219,69 @@ contradict them).
 
 ---
 
+### 11. Per-client authorization for state & event subscriptions
+
+**What:** Today any connected client can send `STATE_SUB` or `EVENT_SUB` for any
+`{actor, actorId}` and receive the full state snapshot plus every update
+(`packages/server/src/handler.ts:74-81`, `packages/server/src/runtime.ts:174-179`).
+Middleware only runs inside `executeMethod` (`runtime.ts:321`) and its
+`MiddlewareArgs` requires a `method` field — so there is no interception point
+on subscribes. Connection auth (via `onConnect` / gateway token) is the
+user's responsibility and that's fine, but once connected, subscribers have no
+gate.
+
+Design a layered API so users can control what leaves the server:
+
+1. **`internalState`** — a second state slot that is never subscribable. Zero
+   ceremony, safe by default. Good for rate counters, raw tokens, server-only
+   bookkeeping. No reactive listeners; if something in `internalState` needs
+   to reach clients, methods `emit(...)` explicitly (same model as events
+   today).
+2. **`subscribableState({ state, ctx }) => partial`** — optional per-actor
+   projection function. Runs per subscriber on state change; return value is
+   what that client sees. Covers the wallhack / area-of-interest case:
+   `state.players` is server-truth, the projection filters to visible-only
+   per viewer. `ctx` comes from the existing middleware chain so `authed`
+   composes. Throwing or returning `false` denies the sub.
+3. **`emitTo(connId, event, payload)`** — escape hatch for apps that outgrow
+   (2). Lets an actor tick author per-client updates manually without leaving
+   the framework.
+
+Events need the same treatment: `canSubscribeEvents({ ctx, event }) => bool`
+so devs can say "subscribe to everything except `adminAction`".
+
+**Why:** Real authorization hole for any multi-tenant or per-user actor. An
+authed client today can read any other user's actor state just by knowing the
+`actorId`. Also the main blocker for multiplayer game use cases (positional
+data leak = wallhacks) — the framework currently has no shape for "everyone
+sees a different view of the same actor," which is table stakes for games.
+
+**Pros:** Closes the last big authorization gap. Layered ladder keeps simple
+apps simple (most users write nothing, state is public to subscribers) while
+giving games and multi-tenant apps a clean path. `internalState` alone
+eliminates a whole class of "oops I stored a secret in state" bugs.
+
+**Cons:** Per-subscriber diff in `subscribableState` is O(N × subscribers)
+work per update — fine at lobby scale (≤~50), bad at MMO scale. Document the
+cliff and point people at `emitTo` when they hit it. Adds two new config
+fields on the actor and one new runtime primitive.
+
+**Context:** Decided against reusing the middleware chain with a sentinel
+`method` name (e.g. `"$subscribeState"`). It works but conflates two
+concerns and every existing middleware that branches on `method` would need
+updating. Dedicated hooks read better.
+
+Also decided against auto-propagating `internalState` changes via listeners
+— keeps one mental model ("events are explicit") and avoids reactive magic.
+
+**Effort:** M (human ~3 days / CC ~1 day) for `internalState` +
+`subscribableState` + `canSubscribeEvents`. Add `emitTo` as a follow-up.
+**Priority:** P1.
+**Depends on:** none. Should land before any external launch that ships
+multi-tenant or game-shaped demos.
+
+---
+
 ## P2 — Required before launch / next sprint
 
 ### 9. Async fan-out for broadcast
@@ -246,7 +309,7 @@ Game lobbies, large chat rooms, popular AI sessions all hit this.
 in the right place. Catch by class in observability.
 
 **Why:** Observability needs to distinguish "user code threw" from "platform timed
-out" from "tenant exceeded quota." Today everything is generic `Error`.
+out" from "workspace or project exceeded quota." Today everything is generic `Error`.
 
 **Pros:** Enables error-class-based metrics, alerts, runbooks.
 
@@ -273,10 +336,10 @@ should not be forgotten.
   reliability boost, not a durability guarantee, in v1 messaging.
 - **OpenTelemetry traces.** Wait until structured logging (#2) is in.
 - **Prometheus metrics + Grafana dashboards.** Wait until structured logging is in.
-- **Custom domains.** v1 is `{tenant}.zocket.io` only.
-- **Firecracker / microVM tenant isolation.** Dedicated runtime per tenant is
+- **Custom domains.** v1 is `{project}.zocket.io` only.
+- **Firecracker / microVM tenant isolation.** Dedicated runtime per project is
   the v1 boundary.
 - **Distributed test harness.** Built before features per founder decision (item
   not yet started; track scope as part of #7 expansion).
 - **Runbook for common incidents.** Becomes important once external users exist.
-- **Connection pool caching for Convex control plane.** Performance, P3.
+- **Connection/database client reuse for the Neon/Drizzle control plane.** Performance, P3.

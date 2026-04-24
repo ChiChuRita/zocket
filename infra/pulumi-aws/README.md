@@ -38,7 +38,7 @@ Optional project runtime config still lives on the runtime stack, not in this ba
 Prerequisites:
 
 - Docker must be running locally because Pulumi builds and pushes the project Dockerfiles to ECR
-- AWS credentials must be allowed to manage ECR, ECS, ALB, ACM, Route 53, CloudWatch, IAM, and VPC resources
+- AWS credentials must be allowed to manage ECR, ECS/Fargate, EC2, EBS, NLB, private Route 53, CloudWatch, IAM, and VPC resources
 - AWS credentials should come from your normal local AWS login/profile, not from the ESC file
 - public DNS stays in Cloudflare, not Route 53
 - after `pulumi up`, point your Cloudflare wildcard record at the exported gateway load balancer hostname
